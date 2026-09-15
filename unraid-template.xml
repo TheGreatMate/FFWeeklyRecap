@@ -15,7 +15,7 @@ FFWeeklyRecap — Weekly Fantasy Football Commissioner Gazette and Situational R
   <Category>Tools: MediaApp:Other Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:3085]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/TheGreatMate/ffweeklyrecap/main/ffweeklyrecap.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/newspaper.png</Icon>
+  <Icon>https://raw.githubusercontent.com/TheGreatMate/ffweeklyrecap/main/public/icon.svg</Icon>
   <ExtraParams/>
   <PostArgs/>
   <CPUset/>
