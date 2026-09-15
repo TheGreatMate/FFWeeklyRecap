@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>sleeper-league-gazette</Name>
+  <Repository>ghcr.io/YOUR_GITHUB_USERNAME/sleeper-league-gazette:latest</Repository>
+  <Registry>https://ghcr.io</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/YOUR_GITHUB_USERNAME/sleeper-league-gazette/issues</Support>
+  <Project>https://github.com/YOUR_GITHUB_USERNAME/sleeper-league-gazette</Project>
+  <Overview>
+Weekly fantasy sports newspaper, commissioner recap generator, and guillotine/survivor tracker for Sleeper fantasy leagues. Generates newspaper front-pages with real team avatars, comprehensive player resolution, and AI recaps.
+  </Overview>
+  <Category>Tools: MediaApp:Other Status:Stable</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL/>
+  <Icon>https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/newspaper.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Description>
+Weekly fantasy sports newspaper, commissioner recap generator, and guillotine/survivor tracker for Sleeper fantasy leagues. Generates newspaper front-pages with real team avatars, comprehensive player resolution, and AI recaps.
+  </Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>3000</HostPort>
+        <ContainerPort>3000</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data/>
+  <Environment>
+    <Variable>
+      <Value>production</Value>
+      <Name>NODE_ENV</Name>
+      <Mode/>
+    </Variable>
+    <Variable>
+      <Value/>
+      <Name>GEMINI_API_KEY</Name>
+      <Mode/>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="Web interface port for Sleeper League Gazette" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Gemini API Key" Target="GEMINI_API_KEY" Default="" Mode="" Description="Optional: Gemini API Key for AI Commissioner narrative generation (the app works with full rule-based templates if left blank)" Type="Variable" Display="always" Required="false" Mask="true"/>
+</Container>

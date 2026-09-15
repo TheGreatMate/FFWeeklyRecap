@@ -1,0 +1,6 @@
+{
+  "name": "Fantasy Commissioner Notes Generator",
+  "description": "Generate Fantasy Football Commissioner Notes using the Sleeper API with head-to-head matchups, biggest blowouts, high-scoring losers, and chopped guillotine survivor recaps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

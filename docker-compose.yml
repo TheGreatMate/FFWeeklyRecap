@@ -1,0 +1,23 @@
+services:
+  sleeper-league-gazette:
+    # Build locally or replace with your GHCR image:
+    # image: ghcr.io/<your-github-username>/<your-repo-name>:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sleeper-league-gazette:latest
+    container_name: sleeper-league-gazette
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Optional: Add your Gemini API key for AI-generated commissioner notes
+      - GEMINI_API_KEY=
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,594 @@
+import express from 'express';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json({ limit: '10mb' }));
+
+// Lazy init for Gemini
+let aiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  if (!aiClient && process.env.GEMINI_API_KEY) {
+    aiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return aiClient;
+}
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// Sleeper API proxy routes
+app.get('/api/sleeper/user/:username', async (req, res) => {
+  try {
+    const username = encodeURIComponent(req.params.username.trim());
+    const sleeperRes = await fetch(`https://api.sleeper.app/v1/user/${username}`);
+    if (!sleeperRes.ok) {
+      return res.status(sleeperRes.status).json({ error: `Sleeper user fetch failed: ${sleeperRes.statusText}` });
+    }
+    const data = await sleeperRes.json();
+    if (!data || !data.user_id) {
+      return res.status(404).json({ error: 'User not found on Sleeper' });
+    }
+    res.json(data);
+  } catch (error: any) {
+    console.error('Error fetching Sleeper user:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+app.get('/api/sleeper/user/:userId/leagues/:season', async (req, res) => {
+  try {
+    const { userId, season } = req.params;
+    const sleeperRes = await fetch(`https://api.sleeper.app/v1/user/${userId}/leagues/nfl/${season}`);
+    if (!sleeperRes.ok) {
+      return res.status(sleeperRes.status).json({ error: `Sleeper leagues fetch failed: ${sleeperRes.statusText}` });
+    }
+    const data = await sleeperRes.json();
+    res.json(data || []);
+  } catch (error: any) {
+    console.error('Error fetching Sleeper leagues:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+// Sleeper Player Cache & Resolution Service
+interface CompactPlayer {
+  id: string;
+  name: string;
+  pos?: string;
+  team?: string;
+}
+
+import { SLEEPER_PLAYERS_MAP } from './src/data/sleeperPlayers';
+
+let playersCache: Record<string, CompactPlayer> = { ...SLEEPER_PLAYERS_MAP };
+let playersCacheFetchPromise: Promise<Record<string, CompactPlayer>> | null = null;
+const PLAYERS_CACHE_FILE = '/tmp/sleeper_players_compact.json';
+
+const NFL_DEFENSES: Record<string, { name: string; team: string }> = {
+  ARI: { name: 'Arizona Cardinals', team: 'ARI' },
+  ATL: { name: 'Atlanta Falcons', team: 'ATL' },
+  BAL: { name: 'Baltimore Ravens', team: 'BAL' },
+  BUF: { name: 'Buffalo Bills', team: 'BUF' },
+  CAR: { name: 'Carolina Panthers', team: 'CAR' },
+  CHI: { name: 'Chicago Bears', team: 'CHI' },
+  CIN: { name: 'Cincinnati Bengals', team: 'CIN' },
+  CLE: { name: 'Cleveland Browns', team: 'CLE' },
+  DAL: { name: 'Dallas Cowboys', team: 'DAL' },
+  DEN: { name: 'Denver Broncos', team: 'DEN' },
+  DET: { name: 'Detroit Lions', team: 'DET' },
+  GB: { name: 'Green Bay Packers', team: 'GB' },
+  HOU: { name: 'Houston Texans', team: 'HOU' },
+  IND: { name: 'Indianapolis Colts', team: 'IND' },
+  JAX: { name: 'Jacksonville Jaguars', team: 'JAX' },
+  KC: { name: 'Kansas City Chiefs', team: 'KC' },
+  LAC: { name: 'Los Angeles Chargers', team: 'LAC' },
+  LAR: { name: 'Los Angeles Rams', team: 'LAR' },
+  LV: { name: 'Las Vegas Raiders', team: 'LV' },
+  MIA: { name: 'Miami Dolphins', team: 'MIA' },
+  MIN: { name: 'Minnesota Vikings', team: 'MIN' },
+  NE: { name: 'New England Patriots', team: 'NE' },
+  NO: { name: 'New Orleans Saints', team: 'NO' },
+  NYG: { name: 'New York Giants', team: 'NYG' },
+  NYJ: { name: 'New York Jets', team: 'NYJ' },
+  PHI: { name: 'Philadelphia Eagles', team: 'PHI' },
+  PIT: { name: 'Pittsburgh Steelers', team: 'PIT' },
+  SEA: { name: 'Seattle Seahawks', team: 'SEA' },
+  SF: { name: 'San Francisco 49ers', team: 'SF' },
+  TB: { name: 'Tampa Bay Buccaneers', team: 'TB' },
+  TEN: { name: 'Tennessee Titans', team: 'TEN' },
+  WAS: { name: 'Washington Commanders', team: 'WAS' },
+};
+
+async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
+  if (playersCache && Object.keys(playersCache).length > 0) {
+    return playersCache;
+  }
+
+  if (playersCacheFetchPromise) {
+    return playersCacheFetchPromise;
+  }
+
+  playersCacheFetchPromise = (async () => {
+    try {
+      // 1. Check local disk cache if exists and fresh (<24h)
+      if (fs.existsSync(PLAYERS_CACHE_FILE)) {
+        try {
+          const fileStats = fs.statSync(PLAYERS_CACHE_FILE);
+          const ageHours = (Date.now() - fileStats.mtimeMs) / (1000 * 60 * 60);
+          if (ageHours < 24) {
+            const fileData = fs.readFileSync(PLAYERS_CACHE_FILE, 'utf8');
+            playersCache = JSON.parse(fileData);
+            if (playersCache && Object.keys(playersCache).length > 1000) {
+              return playersCache;
+            }
+          }
+        } catch (e) {
+          console.warn('Error reading player cache file:', e);
+        }
+      }
+
+      // 2. Fetch fresh from Sleeper API
+      console.log('Fetching Sleeper NFL players dictionary...');
+      const res = await fetch('https://api.sleeper.app/v1/players/nfl');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch players: ${res.statusText}`);
+      }
+      const rawPlayers = await res.json();
+      const compact: Record<string, CompactPlayer> = {};
+
+      for (const [id, p] of Object.entries(rawPlayers as Record<string, any>)) {
+        if (!p) continue;
+        const fullName =
+          p.full_name ||
+          `${p.first_name || ''} ${p.last_name || ''}`.trim() ||
+          id;
+        compact[id] = {
+          id,
+          name: fullName,
+          pos: p.position || '',
+          team: p.team || '',
+        };
+      }
+
+      playersCache = compact;
+
+      // Persist to disk asynchronously
+      fs.writeFile(PLAYERS_CACHE_FILE, JSON.stringify(compact), (err) => {
+        if (err) console.warn('Failed to cache players to disk:', err);
+      });
+
+      return playersCache;
+    } catch (err) {
+      console.error('Failed to load Sleeper players:', err);
+      return playersCache || {};
+    } finally {
+      playersCacheFetchPromise = null;
+    }
+  })();
+
+  return playersCacheFetchPromise;
+}
+
+function resolvePlayerId(id: string, cache: Record<string, CompactPlayer>): CompactPlayer {
+  if (!id || id === '0') {
+    return { id: '', name: 'Empty Slot' };
+  }
+
+  // 1. Check cache for valid non-generic name
+  if (cache[id]) {
+    const p = cache[id];
+    const isGeneric = !p.name || p.name.startsWith('Player #') || /^\d+$/.test(p.name);
+    if (!isGeneric) {
+      return p;
+    }
+  }
+
+  // 2. Check bundled active NFL players database
+  if (SLEEPER_PLAYERS_MAP[id]) {
+    return SLEEPER_PLAYERS_MAP[id];
+  }
+
+  // 3. Check NFL defenses
+  const upper = id.toUpperCase();
+  if (NFL_DEFENSES[upper]) {
+    return {
+      id,
+      name: NFL_DEFENSES[upper].name,
+      pos: 'DEF',
+      team: NFL_DEFENSES[upper].team,
+    };
+  }
+
+  // 4. Check if already a human-readable name (not purely digits)
+  if (!/^\d+$/.test(id)) {
+    return {
+      id,
+      name: id,
+    };
+  }
+
+  // 5. Check cache fallback
+  if (cache[id]) return cache[id];
+
+  return {
+    id,
+    name: `Player #${id}`,
+  };
+}
+
+// Pre-warm the players cache in background
+getSleeperPlayers().catch((err) => console.warn('Pre-warming players cache notice:', err.message));
+
+// Batch player lookup endpoint
+app.get('/api/sleeper/players/batch', async (req, res) => {
+  try {
+    const idsParam = (req.query.ids as string) || '';
+    const ids = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+    const playersDict = await getSleeperPlayers();
+    const result: Record<string, CompactPlayer> = {};
+    ids.forEach((id) => {
+      result[id] = resolvePlayerId(id, playersDict);
+    });
+    res.json({ players: result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to fetch players batch' });
+  }
+});
+
+app.get('/api/sleeper/league/:leagueId/details/:week', async (req, res) => {
+  try {
+    const { leagueId, week } = req.params;
+    const [leagueRes, rostersRes, usersRes, matchupsRes] = await Promise.all([
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}`),
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`),
+      fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`),
+    ]);
+
+    const league = leagueRes.ok ? await leagueRes.json() : null;
+    const rosters = rostersRes.ok ? await rostersRes.json() : [];
+    const users = usersRes.ok ? await usersRes.json() : [];
+    const matchups = matchupsRes.ok ? await matchupsRes.json() : [];
+
+    // Collect all unique player IDs present in matchups and rosters
+    const playerIds = new Set<string>();
+    matchups.forEach((m: any) => {
+      (m.starters || []).forEach((id: string) => playerIds.add(String(id)));
+      (m.players || []).forEach((id: string) => playerIds.add(String(id)));
+      if (m.players_points) {
+        Object.keys(m.players_points).forEach((id) => playerIds.add(String(id)));
+      }
+    });
+    rosters.forEach((r: any) => {
+      (r.starters || []).forEach((id: string) => playerIds.add(String(id)));
+      (r.players || []).forEach((id: string) => playerIds.add(String(id)));
+    });
+
+    const playersDict = await getSleeperPlayers();
+    const resolvedPlayers: Record<string, CompactPlayer> = {};
+    playerIds.forEach((id) => {
+      resolvedPlayers[id] = resolvePlayerId(id, playersDict);
+    });
+
+    res.json({
+      league,
+      rosters,
+      users,
+      matchups,
+      players: resolvedPlayers,
+    });
+  } catch (error: any) {
+    console.error('Error fetching league details:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch league data' });
+  }
+});
+
+// Gemini AI Commissioner Notes Generator
+app.post('/api/gemini/generate-notes', async (req, res) => {
+  try {
+    const {
+      leagueName,
+      week = 1,
+      format = 'head_to_head',
+      stats,
+      choppedStats,
+      tone = 'roast',
+      announcements = '',
+      duesNote = '',
+      includePowerRankings = true,
+      includeWaiverAdvice = true,
+    } = req.body;
+
+    const isChopped = format === 'chopped' || !!choppedStats;
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(503).json({
+        error: 'Gemini API key is not configured in server environment. Please set GEMINI_API_KEY in Settings > Secrets.',
+      });
+    }
+
+    // Tone descriptions
+    let tonePromptDescription = '';
+    switch (tone) {
+      case 'grim_reaper':
+        tonePromptDescription = 'The Grim Reaper / Executioner. Darkly hilarious, solemn funeral eulogy for the eliminated team. Treat the chopped manager with mock gravitas and ceremony, announcing the purge of their roster onto the waiver wire.';
+        break;
+      case 'hunger_games':
+        tonePromptDescription = 'Hunger Games Announcer / Caesar Flickerman. High theatrical drama: "May the fantasy odds be ever in your favor!" Announce the fallen tribute with cannon-fire drama, and praise the surviving apex predators.';
+        break;
+      case 'roast':
+        tonePromptDescription = isChopped
+          ? 'Savage, hilarious trash-talk and roasts. Mock the chopped manager for getting sliced by the guillotine, roast the close-call bubble survivor, and tease the other managers eager to scavenge their dropped players.'
+          : 'Savage, humorous, hilarious trash-talk and roasts. Poke fun at the biggest blowout loser, the lowest scorer, and bad roster choices. Keep it friendly and entertaining like good buddies in a high-stakes league.';
+        break;
+      case 'espn':
+        tonePromptDescription = isChopped
+          ? 'Professional sports broadcast style covering an elimination tournament. Breaking down how the bottom team fell below the cut line, who had a clutch fourth-quarter escape, and analyzing the waiver wire goldrush.'
+          : 'Professional, dramatic sports broadcast style like an ESPN SportsCenter anchor (Scott Van Pelt / Rich Eisen style). Highlighting tactical roster decisions, clutch performances, statistical anomalies, and momentum shifts.';
+        break;
+      case 'commish':
+        tonePromptDescription = 'Authoritative, charismatic, benevolent commissioner tone. Blends league business announcements with enthusiastic commentary, keeping the league active, competitive, and respectful.';
+        break;
+      case 'hype':
+        tonePromptDescription = 'Extreme hype, high energy, exclamation points, epic gladiatorial battle metaphors, electrifying fanfare for the winners and devastating heartbreak for the fallen!';
+        break;
+      case 'conspiracy':
+        tonePromptDescription = 'Humorous fantasy conspiracy theorist who believes the Sleeper algorithm and RNG gods are secretly fixing matches, investigating why unexpected anomalies occurred.';
+        break;
+      default:
+        tonePromptDescription = 'Engaging, fun, and comprehensive fantasy football commissioner recap.';
+    }
+
+    let prompt = '';
+
+    if (isChopped && choppedStats) {
+      const c = choppedStats;
+      prompt = `
+You are the Commissioner of the Guillotine / Chopped Fantasy Football League "${leagueName}".
+In this league format, there are NO WEEKLY HEAD-TO-HEAD MATCHUPS. All teams compete against the entire league each week.
+The lowest-scoring team each week is CHOPPED (eliminated from the league forever), and all players on their roster are released onto the waiver wire for a blind FAAB bidding frenzy!
+The highest-scoring team is the APEX SURVIVOR (immune / league leader).
+
+Write the official Week ${week} Execution Gazette Report & Commissioner Notes for the league members.
+
+TONE GUIDELINES:
+${tonePromptDescription}
+
+KEY SURVIVAL DATA FOR WEEK ${week}:
+- League Name: ${leagueName}
+- Week: ${week}
+- Total Managers: ${c.totalTeams}
+- 🪓 THE CHOPPED & ELIMINATED TEAM (Lowest Score): ${c.choppedTeam?.teamName} (${c.choppedTeam?.ownerName}) with only ${c.choppedTeam?.points} pts! (They have been eliminated from the season!).
+- 💰 STARTERS DUMPED ONTO WAIVERS FROM CHOPPED ROSTER: ${c.choppedTeam?.starters?.join(', ') || 'Their entire lineup'}
+- 👑 APEX SURVIVOR (Highest Score / Immunity): ${c.apexSurvivor?.teamName} (${c.apexSurvivor?.ownerName}) with ${c.apexSurvivor?.points} pts!
+- 🩸 NARROW ESCAPE (Close Shave / Bubble Survivor): ${c.narrowEscape?.team?.teamName} (${c.narrowEscape?.team?.points} pts) who survived the blade by merely +${c.narrowEscape?.marginOverChopped} pts over the chopped team!
+- ⚠️ CHOPPING BLOCK / DANGER ZONE (Bottom survivors): ${c.dangerZone?.map((t: any) => `${t.teamName} (${t.points} pts)`).join(', ')}
+- League Scoring Average: ${c.averageScore} pts | Median: ${c.medianScore} pts
+
+FULL STANDINGS / SURVIVOR LADDER (Ranked highest to lowest):
+${c.allRankedTeams?.map((t: any, i: number) => `${i + 1}. ${t.teamName} (${t.ownerName}) - ${t.points} pts ${t.rosterId === c.choppedTeam?.rosterId ? '-> [🪓 CHOPPED & ELIMINATED]' : ''}`).join('\n')}
+
+${announcements ? `COMMISSIONER ANNOUNCEMENTS / DEADLINES:\n${announcements}\n` : ''}
+${duesNote ? `LEAGUE DUES / FAAB BOUNTY NOTICE:\n${duesNote}\n` : ''}
+
+SECTIONS TO GENERATE:
+1. Executive Gazette Masthead & Tagline ("SAME LEAGUE. DIFFERENT LEVELS.")
+2. Highlights Grid: Blowout / Chop Margin, Apex GM of the Week, Galaxy Brain / Narrow Escape Move, Bonehead Move
+3. Main Feature Story & Proclamation of the Guillotine's Drop (${c.choppedTeam?.teamName} purged)
+4. Monday Night Fallout (how late games sealed the cut line)
+5. The Survivor Ledger: Every manager, score, and margin over the blade with punchy tactical notes
+6. Final Points Leaderboard
+7. Side Pot Desk (Survivor bounty, #1 points, FAAB notice)
+8. Power Rankings (Subjective. Unapologetic. Based on one week of evidence. One biting blurb per manager)
+9. The Commissioner's Notebook (Fraud Watch, Stock Up, Stock Down, Galaxy Brain Move, Bonehead Move, League Canon, Around the League, Week Warning, Final Word)
+
+FORMATTING:
+Output clean, beautifully formatted Markdown with bold titles, emojis, and tables. Make it ready to copy-paste directly into Sleeper league chat or Discord.
+`;
+    } else {
+      prompt = `
+You are the Commissioner of the Fantasy Football League "${leagueName}".
+Write the official Week ${week} Commissioner Gazette & Weekly Newspaper Report for your league members, modeled after an elite executive league newsletter.
+
+TONE GUIDELINES:
+${tonePromptDescription}
+
+CRITICAL DATA POINTS TO FEATURE:
+- League: ${leagueName}
+- Week: ${week}
+- Total Matchups: ${stats?.totalMatchups || 'N/A'}
+- League Average Score: ${stats?.averageScore || 'N/A'} pts
+- 💥 BIGGEST BLOWOUT OF THE WEEK: Winner ${stats?.biggestBlowout?.winner?.teamName} (${stats?.biggestBlowout?.winner?.points} pts) defeated ${stats?.biggestBlowout?.loser?.teamName} (${stats?.biggestBlowout?.loser?.points} pts) by a staggering ${stats?.biggestBlowout?.margin} point margin!
+- 💔 THE UNLUCKY BASTARD CLUB (Highest-Scoring Loser): ${stats?.highestScoringLoser?.team?.teamName} who scored an incredible ${stats?.highestScoringLoser?.team?.points} pts but still took an L against ${stats?.highestScoringLoser?.matchup?.winner?.teamName} (${stats?.highestScoringLoser?.matchup?.winner?.points} pts)!
+- 👑 GM OF THE WEEK (Highest Total Points): ${stats?.highestScorer?.teamName} (${stats?.highestScorer?.ownerName}) with ${stats?.highestScorer?.points} pts!
+- 🥶 LOW SCORER / BONEHEAD MOVE: ${stats?.lowestScorer?.teamName} with ${stats?.lowestScorer?.points} pts!
+${stats?.closestMatchup ? `- ⚡ NAIL-BITER (Closest Game): ${stats?.closestMatchup?.winner?.teamName} (${stats?.closestMatchup?.winner?.points}) vs ${stats?.closestMatchup?.loser?.teamName} (${stats?.closestMatchup?.loser?.points}) - decided by only ${stats?.closestMatchup?.margin} pts!` : ''}
+
+ALL MATCHUPS TO RECAP IN THE WEEK LEDGER:
+${stats?.matchups?.map((m: any, i: number) => `Game ${i + 1}: ${m.winner.teamName} (${m.winner.points} pts) def. ${m.loser.teamName} (${m.loser.points} pts) [Margin: ${m.margin} pts]`).join('\n')}
+
+${announcements ? `COMMISSIONER ANNOUNCEMENTS TO INCLUDE:\n${announcements}\n` : ''}
+${duesNote ? `LEAGUE DUES / TREASURY NOTE TO INCLUDE:\n${duesNote}\n` : ''}
+
+SECTIONS TO GENERATE (INCLUDE ALL OF THESE EXACT HEADERS):
+1. THE REST OF WEEK ${week}:
+   - Blowout of the Week: Scores, margin, and a biting commentary ("That's not a matchup—that's a wellness check")
+   - GM of the Week: Winner, score, record, and rationale ("Sets the standard")
+   - Galaxy Brain Move: Best tactical start, dual QBs in Superflex, or sleeper explosion
+2. LEAD HEADLINE & STORY: (e.g. "[GM] OPENS THE SEASON WITH A STATEMENT" - breakdown of the scoring crown)
+3. MONDAY NIGHT FALLOUT: How Monday night numbers changed the scoreboard and locked in final margins
+4. THE UNLUCKY BASTARD CLUB: Induction of the highest-scoring loser with their bad beat recap and $12.50 side-pot payout
+5. THE WEEK ${week} LEDGER: Table with WINNER | PTS | LOSER | PTS | RECAP (each game gets a sharp, hilarious excuse/recap one-liner!)
+6. FINAL POINTS LEADERBOARD: Table ranked 1 to 12 purely by total points scored with Record
+7. SIDE POT DESK: Total pot ($25.00), #1 Points winner ($12.50), Biggest Blowout winner ($12.50), Next week fee due before TNF
+8. POWER RANKINGS: "Subjective. Unapologetic. Based on one week of evidence." Ranks 1 to 12 with a witty, biting one-sentence rationale for every single manager
+9. THE COMMISSIONER'S NOTEBOOK:
+   - FRAUD WATCH (team that looked terrifying on paper but failed)
+   - STOCK UP (hot contenders)
+   - STOCK DOWN (sub-100 scorers or cold stars)
+   - GALAXY BRAIN MOVE
+   - BONEHEAD MOVE (bench blunder / dud start)
+   - LEAGUE CANON (narratives, rivalries, and lore)
+   - AROUND THE LEAGUE (scoring trends, high averages)
+   - WEEK WARNING (side pot fee & TNF deadline: "Pay your damn five dollars")
+10. FINAL WORD: Authoritative, punchy commissioner closing statement
+
+FORMATTING:
+Output clean, beautifully formatted Markdown with bold titles, markdown tables, and crisp structure. Make it ready to copy-paste directly into Sleeper league chat or Discord.
+`;
+    }
+
+    let generatedText: string | undefined;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+      });
+      generatedText = response.text;
+    } catch (apiErr: any) {
+      console.warn('Gemini 3.8 Flash temporary issue, trying fallback model or template:', apiErr.message);
+      try {
+        const response2 = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+        });
+        generatedText = response2.text;
+      } catch (err2) {
+        console.warn('Fallback model also unavailable, generating tone-adapted note dynamically.');
+      }
+    }
+
+    if (!generatedText) {
+      // High quality tone-crafted fallback note
+      if (isChopped && choppedStats) {
+        const c = choppedStats;
+        generatedText = `# 🪓 ${leagueName} - Week ${week} Execution Report
+*Tone: ${tone.toUpperCase()}*
+
+The blade has fallen. In this Chopped Guillotine league, there are no second chances and no head-to-head match excuses. One squad has been eliminated from the season.
+
+${announcements ? `### 📢 Commissioner Bulletins & Deadlines\n${announcements}\n` : ''}
+${duesNote ? `### 💰 League Dues & FAAB Bounties\n${duesNote}\n` : ''}
+
+## 🪓 THE EXECUTION: REST IN PEACE TO ${c.choppedTeam?.teamName?.toUpperCase()}
+- **Eliminated Manager:** **${c.choppedTeam?.teamName}** (${c.choppedTeam?.ownerName})
+- **Score:** **${c.choppedTeam?.points} pts** (Lowest in the league)
+- **Status:** **CHOPPED & REMOVED FROM PLAY**
+- 🥩 **Waiver Wire Goldrush:** All starters from ${c.choppedTeam?.teamName} (${c.choppedTeam?.starters?.slice(0, 6).join(', ') || 'Roster'}) are immediately dumped to waivers. Check your FAAB budgets!
+
+## 🏆 SURVIVOR HONORS
+- 👑 **APEX SURVIVOR:** **${c.apexSurvivor?.teamName}** crushed the league with **${c.apexSurvivor?.points} pts**, securing undisputed immunity.
+- 🩸 **THE NARROW ESCAPE:** **${c.narrowEscape?.team?.teamName}** survived by a razor-thin **+${c.narrowEscape?.marginOverChopped} pts**! One missed catch away from the guillotine.
+
+## 🪜 WEEK ${week} SURVIVOR STANDINGS
+${c.allRankedTeams?.map((t: any, idx: number) => `${idx + 1}. ${t.rosterId === c.choppedTeam?.rosterId ? '💀' : idx === 0 ? '👑' : '🛡️'} **${t.teamName}** (${t.ownerName}) - **${t.points} pts** ${t.rosterId === c.choppedTeam?.rosterId ? '*(🪓 CHOPPED)*' : '*(SURVIVED)*'}`).join('\n')}
+
+---
+*Generated by Fantasy Commissioner Notes using Sleeper API*`;
+      } else {
+        let intro = '';
+        if (tone === 'roast') {
+          intro = `Fire up the group chat and grab your popcorn. Week ${week} was an absolute demolition derby. Some of you drafted championship contenders, and some of you drafted like you closed your eyes and threw darts at an injury report.`;
+        } else if (tone === 'espn') {
+          intro = `Welcome back to the Monday Night wrap-up. Week ${week} delivered thrilling wire-to-wire drama, breakout individual performances, and tactical missteps across the gridiron.`;
+        } else if (tone === 'conspiracy') {
+          intro = `I've analyzed the Sleeper algorithm, the projection models, and the waiver order. There is no mathematical explanation for how the highest-scoring loser was paired against the week's highest scorer. The fantasy football matrix is Glitching.`;
+        } else if (tone === 'hype') {
+          intro = `LET'S GO! Week ${week} is officially in the books! Legends were forged in the endzones, titans fell to earth, and the journey to fantasy glory has begun!`;
+        } else {
+          intro = `Welcome to the official Week ${week} Commissioner Recap. We had great matchups across the league, high drama, and an exciting kickoff to the season!`;
+        }
+
+        generatedText = `# 🏈 ${leagueName} - Week ${week} Commissioner Notes
+*Tone: ${tone.toUpperCase()}*
+
+${intro}
+
+${announcements ? `### 📢 League Announcements\n${announcements}\n` : ''}
+${duesNote ? `### 💰 League Dues & Treasury Reminder\n${duesNote}\n` : ''}
+
+## 🏆 Week ${week} Honors, Disasters & Bad Beats
+
+- 💥 **THE BIGGEST BLOWOUT OF THE WEEK:**
+  **${stats?.biggestBlowout?.winner?.teamName}** (${stats?.biggestBlowout?.winner?.points} pts) completely annihilated **${stats?.biggestBlowout?.loser?.teamName}** (${stats?.biggestBlowout?.loser?.points} pts) by **${stats?.biggestBlowout?.margin} points**! Someone check on ${stats?.biggestBlowout?.loser?.teamName} in the group chat.
+
+- 💔 **THE TOUGH LUCK BAD BEAT (Highest-Scoring Loser):**
+  A moment of silence for **${stats?.highestScoringLoser?.team?.teamName}**. Dropped **${stats?.highestScoringLoser?.team?.points} pts**—a score that would have defeated nearly every other team in the league—only to run straight into **${stats?.highestScoringLoser?.matchup?.winner?.teamName}** (${stats?.highestScoringLoser?.matchup?.winner?.points} pts). Brutal fantasy heartbreak.
+
+- 👑 **HIGH ROLLER OF THE WEEK:**
+  **${stats?.highestScorer?.teamName}** with a monster **${stats?.highestScorer?.points} pts**. Put some respect on their name.
+
+- 🥶 **ICE COLD TOILET BOWL AWARD:**
+  **${stats?.lowestScorer?.teamName}** managed just **${stats?.lowestScorer?.points} pts**. Might want to check if the starters were actually active.
+
+${stats?.closestMatchup ? `- ⚡ **CARDIAC FINISH (Closest Game):**\n  **${stats?.closestMatchup?.winner?.teamName}** (${stats?.closestMatchup?.winner?.points}) held on by a thread against **${stats?.closestMatchup?.loser?.teamName}** (${stats?.closestMatchup?.loser?.points}) by just **${stats?.closestMatchup?.margin} pts**!\n` : ''}
+
+## ⚔️ Head-to-Head Matchup Breakdown
+${stats?.matchups?.map((m: any, i: number) => `### Game ${i + 1}: ${m.winner.teamName} (${m.winner.points}) def. ${m.loser.teamName} (${m.loser.points})
+> **Margin:** +${m.margin} pts | Total combined: ${(m.winner.points + m.loser.points).toFixed(2)} pts. ${m.winner.teamName} takes the Week ${week} W.`).join('\n\n')}
+
+${includePowerRankings ? `## 📈 Commissioner's Quick Power Rankings
+1. 🥇 **${stats?.highestScorer?.teamName}** - Scorching hot offense out of the gate.
+2. 🥈 **${stats?.biggestBlowout?.winner?.teamName}** - Ruthless efficiency and dominance.
+3. 🥉 **${stats?.highestScoringLoser?.matchup?.winner?.teamName}** - Battle-tested victory in a shootout.
+4. 🧱 **${stats?.highestScoringLoser?.team?.teamName}** - Unlucky 0-1, but the roster is loaded.
+...
+12. 🧻 **${stats?.lowestScorer?.teamName}** - Time to hit the waiver wire and pray.` : ''}
+
+---
+*Generated by Fantasy Commissioner Notes using Sleeper API*`;
+      }
+    }
+
+    res.json({
+      notes: generatedText,
+    });
+  } catch (error: any) {
+    console.error('Error generating AI commissioner notes:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to generate AI notes',
+    });
+  }
+});
+
+async function startServer() {
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
