@@ -30,7 +30,10 @@ function getGeminiClient(): GoogleGenAI | null {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({
+    status: 'ok',
+    hasGeminiKey: !!process.env.GEMINI_API_KEY,
+  });
 });
 
 // Sleeper API proxy routes
@@ -317,13 +320,7 @@ app.post('/api/gemini/generate-notes', async (req, res) => {
     } = req.body;
 
     const isChopped = format === 'chopped' || !!choppedStats;
-
     const ai = getGeminiClient();
-    if (!ai) {
-      return res.status(503).json({
-        error: 'Gemini API key is not configured in server environment. Please set GEMINI_API_KEY in Settings > Secrets.',
-      });
-    }
 
     // Tone descriptions
     let tonePromptDescription = '';
@@ -457,23 +454,28 @@ Output clean, beautifully formatted Markdown with bold titles, markdown tables, 
     }
 
     let generatedText: string | undefined;
+    let usedAi = false;
 
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
-        contents: prompt,
-      });
-      generatedText = response.text;
-    } catch (apiErr: any) {
-      console.warn('Gemini 3.8 Flash temporary issue, trying fallback model or template:', apiErr.message);
+    if (ai) {
       try {
-        const response2 = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
           contents: prompt,
         });
-        generatedText = response2.text;
-      } catch (err2) {
-        console.warn('Fallback model also unavailable, generating tone-adapted note dynamically.');
+        generatedText = response.text;
+        usedAi = true;
+      } catch (apiErr: any) {
+        console.warn('Gemini 3.8 Flash temporary issue, trying fallback model or template:', apiErr.message);
+        try {
+          const response2 = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+          });
+          generatedText = response2.text;
+          usedAi = true;
+        } catch (err2) {
+          console.warn('Fallback model also unavailable, generating tone-adapted note dynamically.');
+        }
       }
     }
 
@@ -561,6 +563,7 @@ ${includePowerRankings ? `## 📈 Commissioner's Quick Power Rankings
 
     res.json({
       notes: generatedText,
+      isAi: usedAi,
     });
   } catch (error: any) {
     console.error('Error generating AI commissioner notes:', error);

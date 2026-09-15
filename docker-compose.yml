@@ -1,15 +1,19 @@
 services:
-  sleeper-league-gazette:
-    # Build locally or replace with your GHCR image:
-    # image: ghcr.io/<your-github-username>/<your-repo-name>:latest
+  ffweeklyrecap:
+    # Build locally or pull from your GitHub Container Registry:
+    # image: ghcr.io/dbot97/ffweeklyrecap:latest
     build:
       context: .
       dockerfile: Dockerfile
-    image: sleeper-league-gazette:latest
-    container_name: sleeper-league-gazette
+    image: ghcr.io/dbot97/ffweeklyrecap:latest
+    container_name: ffweeklyrecap
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      # Host 3085 maps to container 3000 (prevents conflict if ffwarrm uses 3000)
+      - "3085:3000"
+    volumes:
+      # Baked-in Unraid appdata volume path
+      - /mnt/user/appdata/ffweeklyrecap:/config
     environment:
       - NODE_ENV=production
       - PORT=3000

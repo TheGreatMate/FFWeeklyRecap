@@ -98,6 +98,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
 
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [generationSource, setGenerationSource] = useState<'ai' | 'builtin' | null>('builtin');
   const [copied, setCopied] = useState(false);
 
   // Keep gazette data synchronized when league, stats, or side-pot changes
@@ -234,22 +235,23 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate AI notes');
+        throw new Error(data.error || 'Failed to generate report');
       }
 
       if (data.notes) {
         setGeneratedNotes(data.notes);
+        setGenerationSource(data.isAi ? 'ai' : 'builtin');
         // Also update the lead story in the gazette data
         setGazetteData((prev) => ({
           ...prev,
           leadStory: `${data.notes.slice(0, 320)}...`,
         }));
       } else {
-        throw new Error('No content returned from AI');
+        throw new Error('No content returned');
       }
     } catch (err: any) {
-      console.warn('AI generation notice:', err.message);
-      setAiError(err.message || 'AI generation failed. Switched to instant template.');
+      console.warn('Note generation notice:', err.message);
+      setGenerationSource('builtin');
       handleGenerateTemplate();
     } finally {
       setIsGeneratingAI(false);
@@ -258,6 +260,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
 
   const handleGenerateTemplate = () => {
     setAiError(null);
+    setGenerationSource('builtin');
     const updated = buildGazetteReportData(
       leagueName,
       stats,
@@ -530,12 +533,12 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
               {isGeneratingAI ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Gemini AI is Writing Gazette...</span>
+                  <span>Drafting Weekly Gazette Report...</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 text-amber-300" />
-                  <span>Generate Gazette with Gemini AI</span>
+                  <span>Generate / Refresh Gazette Report</span>
                 </>
               )}
             </button>
@@ -547,16 +550,29 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
               className="w-full py-2.5 px-3 bg-slate-950 hover:bg-slate-800/80 border border-slate-700 text-slate-300 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              <span>Instant Recalculate (Offline Template)</span>
+              <span>Instant Recalculate (Offline Engine)</span>
             </button>
           </div>
 
-          {aiError && (
-            <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-500/40 text-xs text-amber-200">
-              <p className="font-semibold mb-0.5">Template Mode Active:</p>
-              <p className="text-[11px] text-amber-300/80">{aiError}</p>
-            </div>
-          )}
+          {/* Engine Status Indicator */}
+          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+            <span className="flex items-center gap-1.5">
+              {generationSource === 'ai' ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-slate-300 font-medium">Gemini AI Active</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-slate-300 font-medium">Built-in Engine</span>
+                </>
+              )}
+            </span>
+            <span className="text-slate-400">
+              {generationSource === 'ai' ? 'Cloud Model' : 'No API Key Required'}
+            </span>
+          </div>
         </div>
 
         {/* Right Column: Output Preview and Gazette */}

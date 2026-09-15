@@ -20,14 +20,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-lg font-bold tracking-tight text-white">
-                Sleeper Commish Notes
+                FFWeeklyRecap
               </h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800">
                 2026 Season
               </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
-              Blowouts, Bad Beats & AI Commissioner Recaps
+              Weekly Commissioner Gazette, Blowouts & Sleeper League Honors
             </p>
           </div>
         </div>
