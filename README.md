@@ -87,7 +87,7 @@ cat << 'EOF' > /boot/config/plugins/dockerMan/templates-user/my-ffweeklyrecap.xm
   <Overview>FFWeeklyRecap — Weekly Fantasy Football Commissioner Gazette and Situational Report for Sleeper leagues.</Overview>
   <Category>Tools: MediaApp:Other Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:3085]/</WebUI>
-  <Icon>https://raw.githubusercontent.com/TheGreatMate/ffweeklyrecap/main/public/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/TheGreatMate/ffweeklyrecap/main/public/icon.png</Icon>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
