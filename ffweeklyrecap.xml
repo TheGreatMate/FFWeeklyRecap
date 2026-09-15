@@ -1,20 +1,20 @@
 <?xml version="1.0"?>
 <Container version="2">
   <Name>FFWeeklyRecap</Name>
-  <Repository>ghcr.io/dbot97/ffweeklyrecap:latest</Repository>
+  <Repository>ghcr.io/thegreatmate/ffweeklyrecap:latest</Repository>
   <Registry>https://ghcr.io</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/dbot97/ffweeklyrecap/issues</Support>
-  <Project>https://github.com/dbot97/ffweeklyrecap</Project>
+  <Support>https://github.com/TheGreatMate/ffweeklyrecap/issues</Support>
+  <Project>https://github.com/TheGreatMate/ffweeklyrecap</Project>
   <Overview>
 FFWeeklyRecap — Weekly Fantasy Football Commissioner Gazette and Situational Report for Sleeper leagues. Pulls live matchups, starters, avatars, scores, blowouts, bad beats, and chopped survivor eliminations to generate 3-page gazette front pages, honors, power rankings, and tone-adapted commissioner recaps.
   </Overview>
   <Category>Tools: MediaApp:Other Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:3085]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/dbot97/ffweeklyrecap/main/ffweeklyrecap.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/TheGreatMate/ffweeklyrecap/main/ffweeklyrecap.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/newspaper.png</Icon>
   <ExtraParams/>
   <PostArgs/>

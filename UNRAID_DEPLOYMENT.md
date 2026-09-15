@@ -13,7 +13,7 @@ All ports (`3085:3000`), persistent storage paths (`/mnt/user/appdata/ffweeklyre
    ```text
    ffweeklyrecap
    ```
-   (Full URL will be: `https://github.com/dbot97/ffweeklyrecap`)
+   (Full URL will be: `https://github.com/TheGreatMate/ffweeklyrecap`)
 
 ---
 
@@ -25,7 +25,7 @@ A pre-configured GitHub Actions workflow (`.github/workflows/docker-publish.yml`
 2. Watch the **"Build and Publish Docker Image to GHCR"** run.
 3. When it finishes (~2 minutes), your image will be published at:
    ```text
-   ghcr.io/dbot97/ffweeklyrecap:latest
+   ghcr.io/thegreatmate/ffweeklyrecap:latest
    ```
 4. **Make the package public (one-time setting):**
    - In GitHub, go to your profile -> **Packages** -> select **`ffweeklyrecap`**.
@@ -48,14 +48,14 @@ cat << 'EOF' > /boot/config/plugins/dockerMan/templates-user/my-ffweeklyrecap.xm
 <?xml version="1.0"?>
 <Container version="2">
   <Name>FFWeeklyRecap</Name>
-  <Repository>ghcr.io/dbot97/ffweeklyrecap:latest</Repository>
+  <Repository>ghcr.io/thegreatmate/ffweeklyrecap:latest</Repository>
   <Registry>https://ghcr.io</Registry>
   <Network>bridge</Network>
   <MyIP/>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
-  <Support>https://github.com/dbot97/ffweeklyrecap/issues</Support>
-  <Project>https://github.com/dbot97/ffweeklyrecap</Project>
+  <Support>https://github.com/TheGreatMate/ffweeklyrecap/issues</Support>
+  <Project>https://github.com/TheGreatMate/ffweeklyrecap</Project>
   <Overview>FFWeeklyRecap — Weekly Fantasy Football Commissioner Gazette and Situational Report for Sleeper leagues.</Overview>
   <Category>Tools: MediaApp:Other Status:Stable</Category>
   <WebUI>http://[IP]:[PORT:3085]/</WebUI>
@@ -109,7 +109,7 @@ Open `\\YOUR-UNRAID-IP\flash\config\plugins\dockerMan\templates-user\` and copy 
 2. In the **Template** dropdown at the top, select **`my-ffweeklyrecap`**.
 3. **Notice that EVERYTHING is already filled in for you:**
    - **Name**: `FFWeeklyRecap`
-   - **Repository**: `ghcr.io/dbot97/ffweeklyrecap:latest`
+   - **Repository**: `ghcr.io/thegreatmate/ffweeklyrecap:latest`
    - **Icon**: Pre-filled Lucide newspaper badge
    - **WebUI**: `http://[IP]:[PORT:3085]/`
    - **Port**: Host `3085` -> Container `3000` *(prevents port conflicts)*
@@ -128,7 +128,7 @@ If you use the **Docker Compose Manager** plugin from the Unraid Community Apps 
    ```yaml
    services:
      ffweeklyrecap:
-       image: ghcr.io/dbot97/ffweeklyrecap:latest
+       image: ghcr.io/thegreatmate/ffweeklyrecap:latest
        container_name: ffweeklyrecap
        restart: unless-stopped
        ports:
@@ -158,7 +158,7 @@ docker run -d \
   -e NODE_ENV=production \
   -e PORT=3000 \
   --restart=unless-stopped \
-  ghcr.io/dbot97/ffweeklyrecap:latest
+  ghcr.io/thegreatmate/ffweeklyrecap:latest
 ```
 
 ---

@@ -1,11 +1,11 @@
 services:
   ffweeklyrecap:
     # Build locally or pull from your GitHub Container Registry:
-    # image: ghcr.io/dbot97/ffweeklyrecap:latest
+    # image: ghcr.io/thegreatmate/ffweeklyrecap:latest
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/dbot97/ffweeklyrecap:latest
+    image: ghcr.io/thegreatmate/ffweeklyrecap:latest
     container_name: ffweeklyrecap
     restart: unless-stopped
     ports:
