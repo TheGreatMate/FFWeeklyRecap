@@ -57,6 +57,8 @@ export function resolvePlayer(
         name: p.name,
         pos: p.pos || '',
         team: p.team || '',
+        searchRank: typeof p.searchRank === 'number' ? p.searchRank : undefined,
+        points: typeof p.points === 'number' ? p.points : undefined,
       };
     }
   }
@@ -69,6 +71,7 @@ export function resolvePlayer(
       name: p.name,
       pos: p.pos || '',
       team: p.team || '',
+      searchRank: typeof p.searchRank === 'number' ? p.searchRank : undefined,
     };
   }
 
@@ -81,6 +84,7 @@ export function resolvePlayer(
       name: def.name,
       pos: 'DEF',
       team: def.team,
+      searchRank: 400,
     };
   }
 
@@ -102,6 +106,8 @@ export function resolvePlayer(
       name: p.name || id,
       pos: p.pos || '',
       team: p.team || '',
+      searchRank: p.searchRank,
+      points: p.points,
     };
   }
 

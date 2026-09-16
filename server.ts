@@ -95,6 +95,20 @@ app.post('/api/gemini/verify-key', async (req, res) => {
 });
 
 // Sleeper API proxy routes
+app.get('/api/sleeper/state', async (req, res) => {
+  try {
+    const sleeperRes = await fetch('https://api.sleeper.app/v1/state/nfl');
+    if (!sleeperRes.ok) {
+      return res.status(sleeperRes.status).json({ error: `Sleeper state fetch failed: ${sleeperRes.statusText}` });
+    }
+    const data = await sleeperRes.json();
+    res.json(data);
+  } catch (error: any) {
+    console.error('Error fetching Sleeper NFL state:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 app.get('/api/sleeper/user/:username', async (req, res) => {
   try {
     const username = encodeURIComponent(req.params.username.trim());
@@ -128,12 +142,29 @@ app.get('/api/sleeper/user/:userId/leagues/:season', async (req, res) => {
   }
 });
 
+app.get('/api/sleeper/league/:leagueId', async (req, res) => {
+  try {
+    const { leagueId } = req.params;
+    const sleeperRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}`);
+    if (!sleeperRes.ok) {
+      return res.status(sleeperRes.status).json({ error: `Sleeper league fetch failed: ${sleeperRes.statusText}` });
+    }
+    const data = await sleeperRes.json();
+    res.json(data || null);
+  } catch (error: any) {
+    console.error('Error fetching Sleeper league:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 // Sleeper Player Cache & Resolution Service
 interface CompactPlayer {
   id: string;
   name: string;
   pos?: string;
   team?: string;
+  searchRank?: number;
+  points?: number;
 }
 
 import { SLEEPER_PLAYERS_MAP } from './src/data/sleeperPlayers';
@@ -225,6 +256,7 @@ async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
           name: fullName,
           pos: p.position || '',
           team: p.team || '',
+          searchRank: typeof p.search_rank === 'number' && p.search_rank > 0 ? p.search_rank : 99999,
         };
       }
 
@@ -274,6 +306,7 @@ function resolvePlayerId(id: string, cache: Record<string, CompactPlayer>): Comp
       name: NFL_DEFENSES[upper].name,
       pos: 'DEF',
       team: NFL_DEFENSES[upper].team,
+      searchRank: 400,
     };
   }
 
@@ -376,9 +409,11 @@ app.post('/api/gemini/generate-notes', async (req, res) => {
       includePowerRankings = true,
       includeWaiverAdvice = true,
       customApiKey,
+      sidePotConfig,
     } = req.body;
 
     const isChopped = format === 'chopped' || !!choppedStats;
+    const isSidePotEnabled = Boolean(sidePotConfig?.enabled);
     const providedKey = (req.headers['x-gemini-api-key'] as string) || customApiKey;
     const ai = getGeminiClient(providedKey);
 
@@ -418,6 +453,17 @@ app.post('/api/gemini/generate-notes', async (req, res) => {
 
     if (isChopped && choppedStats) {
       const c = choppedStats;
+      const topChoppedStars =
+        (c.topRankedChoppedPlayers && c.topRankedChoppedPlayers.length > 0
+          ? c.topRankedChoppedPlayers
+          : c.choppedTeam?.topRankedPlayers && c.choppedTeam.topRankedPlayers.length > 0
+          ? c.choppedTeam.topRankedPlayers
+          : c.choppedRosterDetails?.slice(0, 3) || []
+        )
+          .map((p: any) => `${p.name}${p.pos ? ` (${p.pos})` : ''}`)
+          .filter(Boolean)
+          .join(', ') || 'their premier starters';
+
       prompt = `
 You are the Commissioner of the Guillotine / Chopped Fantasy Football League "${leagueName}".
 In this league format, there are NO WEEKLY HEAD-TO-HEAD MATCHUPS. All teams compete against the entire league each week.
@@ -434,7 +480,7 @@ KEY SURVIVAL DATA FOR WEEK ${week}:
 - Week: ${week}
 - Total Managers: ${c.totalTeams}
 - 🪓 THE CHOPPED & ELIMINATED TEAM (Lowest Score): ${c.choppedTeam?.teamName} (${c.choppedTeam?.ownerName}) with only ${c.choppedTeam?.points} pts! (They have been eliminated from the season!).
-- 💰 STARTERS DUMPED ONTO WAIVERS FROM CHOPPED ROSTER: ${c.choppedTeam?.starters?.join(', ') || 'Their entire lineup'}
+- 💰 TOP-RANKED STAR PLAYERS ON CHOPPED ROSTER SURRENDERED TO WAIVERS: ${topChoppedStars} (feature these exact top-ranked stars in the story and waiver notes!)
 - 👑 APEX SURVIVOR (Highest Score / Immunity): ${c.apexSurvivor?.teamName} (${c.apexSurvivor?.ownerName}) with ${c.apexSurvivor?.points} pts!
 - 🩸 NARROW ESCAPE (Close Shave / Bubble Survivor): ${c.narrowEscape?.team?.teamName} (${c.narrowEscape?.team?.points} pts) who survived the blade by merely +${c.narrowEscape?.marginOverChopped} pts over the chopped team!
 - ⚠️ CHOPPING BLOCK / DANGER ZONE (Bottom survivors): ${c.dangerZone?.map((t: any) => `${t.teamName} (${t.points} pts)`).join(', ')}
@@ -446,26 +492,89 @@ ${c.allRankedTeams?.map((t: any, i: number) => `${i + 1}. ${t.teamName} (${t.own
 ${announcements ? `COMMISSIONER ANNOUNCEMENTS / DEADLINES:\n${announcements}\n` : ''}
 ${duesNote ? `LEAGUE DUES / FAAB BOUNTY NOTICE:\n${duesNote}\n` : ''}
 
+${
+  !isSidePotEnabled
+    ? `SIDE POT POLICY: The weekly side pot is DISABLED / NOT opted-in for this league. DO NOT generate a Side Pot Desk section, and do NOT mention side pot entry fees or payouts.`
+    : `SIDE POT ACTIVE: Total pot ($${(sidePotConfig?.totalPot || 25).toFixed(2)}), #1 Points winner ($${(sidePotConfig?.pointsWinnerPayout || 12.5).toFixed(2)}), Biggest Blowout ($${(sidePotConfig?.blowoutWinnerPayout || 12.5).toFixed(2)}), Next week fee ($${sidePotConfig?.entryFee || 5}).`
+}
+
 SECTIONS TO GENERATE:
 1. Executive Gazette Masthead & Tagline ("SAME LEAGUE. DIFFERENT LEVELS.")
 2. Highlights Grid: Blowout / Chop Margin, Apex GM of the Week, Galaxy Brain / Narrow Escape Move, Bonehead Move
-3. Main Feature Story & Proclamation of the Guillotine's Drop (${c.choppedTeam?.teamName} purged)
+3. Main Feature Story & Proclamation of the Guillotine's Drop (${c.choppedTeam?.teamName} purged, spotlighting top-ranked stars hitting waivers: ${topChoppedStars})
 4. Monday Night Fallout (how late games sealed the cut line)
 5. The Survivor Ledger: Every manager, score, and margin over the blade with punchy tactical notes
 6. Final Points Leaderboard
-7. Side Pot Desk (Survivor bounty, #1 points, FAAB notice)
+${isSidePotEnabled ? `7. Side Pot Desk (Total pot, #1 points payout, next week fee notice)` : ''}
 8. Power Rankings (Subjective. Unapologetic. Based on one week of evidence. One biting blurb per manager)
 9. The Commissioner's Notebook (Fraud Watch, Stock Up, Stock Down, Galaxy Brain Move, Bonehead Move, League Canon, Around the League, Week Warning, Final Word)
 
 FORMATTING:
 Output clean, beautifully formatted Markdown with bold titles, emojis, and tables. Make it ready to copy-paste directly into Sleeper league chat or Discord.
 CRITICAL OUTPUT INSTRUCTIONS:
+- In the reports, list the top-ranked players (${topChoppedStars}) instead of random starters.
 - NEVER print any label like "Tone:", "*Tone: ROAST*", "Tone Requirements:", or "Tone Guidelines:".
 - NEVER output meta-instructions, preamble phrases (e.g. "Here is your report:"), or conversational filler.
 - The output must dive directly into the report content without echoing prompt rules.
 `;
     } else {
-      prompt = `
+      const isUnplayedWeek = Boolean(stats && (stats.hasStarted === false || (stats.totalScore !== undefined && stats.totalScore === 0)));
+      const topScorerStars = stats?.highestScorer?.topRankedPlayers
+        ?.map((p: any) => `${p.name}${p.pos ? ` (${p.pos})` : ''}`)
+        .join(', ');
+
+      if (isUnplayedWeek) {
+        prompt = `
+You are the Commissioner of the Fantasy Football League "${leagueName}".
+Write the official Week ${week} Matchup Preview & Pre-Game Commissioner Report for your league members.
+
+CRITICAL FACTUAL CONTEXT:
+- Week ${week} games HAVE NOT BEEN PLAYED YET on Sleeper.
+- All teams currently sit at 0.00 points awaiting kickoff.
+- DO NOT INVENT fake final scores, fake blowout margins, fake winners, or fake losers!
+- Write a thrilling, entertaining Pre-Game Matchup Preview highlighting the scheduled head-to-head battles!
+
+TONE GUIDELINES:
+${tonePromptDescription}
+
+SCHEDULED HEAD-TO-HEAD MATCHUPS FOR WEEK ${week}:
+${stats?.matchups?.map((m: any, i: number) => `Matchup ${i + 1}: ${m.teamA.teamName} (${m.teamA.ownerName}) vs ${m.teamB.teamName} (${m.teamB.ownerName})`).join('\n') || 'Scheduled league matchups pending kickoff'}
+
+${announcements ? `COMMISSIONER ANNOUNCEMENTS TO INCLUDE:\n${announcements}\n` : ''}
+${duesNote ? `LEAGUE DUES / TREASURY NOTE TO INCLUDE:\n${duesNote}\n` : ''}
+
+${
+  !isSidePotEnabled
+    ? `SIDE POT POLICY: The weekly side pot is DISABLED / NOT opted-in for this league. DO NOT generate a Side Pot Desk section.`
+    : `SIDE POT ACTIVE: Total pot ($${(sidePotConfig?.totalPot || 25).toFixed(2)}), #1 Points prize ($${(sidePotConfig?.pointsWinnerPayout || 12.5).toFixed(2)}), Blowout prize ($${(sidePotConfig?.blowoutWinnerPayout || 12.5).toFixed(2)}), Entry fee ($${sidePotConfig?.entryFee || 5}) due before kickoff.`
+}
+
+SECTIONS TO GENERATE:
+1. LEAD HEADLINE & STORY: (e.g. "WEEK ${week} MATCHUP PREVIEW: BATTLES SET AS KICKOFF LOOMS")
+2. THE REST OF WEEK ${week}:
+   - Marquee Clash: Spotlight the featured matchup (${stats?.matchups?.[0]?.teamA?.teamName || 'Team A'} vs ${stats?.matchups?.[0]?.teamB?.teamName || 'Team B'})
+   - Lineup Readiness: Starters check and injury monitoring
+   - Tactical Advice: Key start/sit dilemmas before kickoff
+3. SCHEDULED MATCHUP LEDGER: Table detailing every head-to-head clash with pre-game storylines
+4. CURRENT STANDINGS: Roster overview heading into Week ${week}
+${isSidePotEnabled ? `5. SIDE POT DESK: Reminder on entry fee and upcoming payout categories` : ''}
+6. PRE-GAME POWER RANKINGS: Rankings heading into Week ${week} with sharp, witty observations
+7. THE COMMISSIONER'S NOTEBOOK:
+   - WAIVER & LINEUP ALERTS
+   - GALAXY BRAIN START
+   - DUD RISK WARNING
+   - LEAGUE RIVALRIES TO WATCH
+   - FINAL WORD: Kickoff reminder and good luck message
+
+FORMATTING:
+Output clean, beautifully formatted Markdown with bold titles, tables, and crisp structure.
+CRITICAL OUTPUT INSTRUCTIONS:
+- Do NOT list fake past scores or pretend the week was already played.
+- NEVER print any label like "Tone:", "*Tone: ROAST*", "Tone Requirements:", or "Tone Guidelines:".
+- The output must dive directly into the report content without preamble or meta-commentary.
+`;
+      } else {
+        prompt = `
 You are the Commissioner of the Fantasy Football League "${leagueName}".
 Write the official Week ${week} Commissioner Gazette & Weekly Newspaper Report for your league members, modeled after an elite executive league newsletter.
 
@@ -479,8 +588,14 @@ CRITICAL DATA POINTS TO FEATURE:
 - League Average Score: ${stats?.averageScore || 'N/A'} pts
 - 💥 BIGGEST BLOWOUT OF THE WEEK: Winner ${stats?.biggestBlowout?.winner?.teamName} (${stats?.biggestBlowout?.winner?.points} pts) defeated ${stats?.biggestBlowout?.loser?.teamName} (${stats?.biggestBlowout?.loser?.points} pts) by a staggering ${stats?.biggestBlowout?.margin} point margin!
 - 💔 THE UNLUCKY BASTARD CLUB (Highest-Scoring Loser): ${stats?.highestScoringLoser?.team?.teamName} who scored an incredible ${stats?.highestScoringLoser?.team?.points} pts but still took an L against ${stats?.highestScoringLoser?.matchup?.winner?.teamName} (${stats?.highestScoringLoser?.matchup?.winner?.points} pts)!
-- 👑 GM OF THE WEEK (Highest Total Points): ${stats?.highestScorer?.teamName} (${stats?.highestScorer?.ownerName}) with ${stats?.highestScorer?.points} pts!
+- 👑 GM OF THE WEEK (Highest Total Points): ${stats?.highestScorer?.teamName} (${stats?.highestScorer?.ownerName}) with ${stats?.highestScorer?.points} pts!${topScorerStars ? ` (Top stars led by: ${topScorerStars})` : ''}
 - 🥶 LOW SCORER / BONEHEAD MOVE: ${stats?.lowestScorer?.teamName} with ${stats?.lowestScorer?.points} pts!
+${stats?.topPositionalBlunder ? `- 🤦 BENCH BLUNDER / START-SIT REGRET ("IF ONLY..."):
+  Manager: ${stats.topPositionalBlunder.manager} (${stats.topPositionalBlunder.teamName})
+  Benched Player: ${stats.topPositionalBlunder.benchPlayerName} (${stats.topPositionalBlunder.position}, ${stats.topPositionalBlunder.benchPlayerPoints} pts on bench)
+  Started Player: ${stats.topPositionalBlunder.starterPlayerName} (${stats.topPositionalBlunder.position}, ${stats.topPositionalBlunder.starterPlayerPoints} pts)
+  Swing: +${stats.topPositionalBlunder.pointsDifference} pts
+  Context: "${stats.topPositionalBlunder.blurb}"` : ''}
 ${stats?.closestMatchup ? `- ⚡ NAIL-BITER (Closest Game): ${stats?.closestMatchup?.winner?.teamName} (${stats?.closestMatchup?.winner?.points}) vs ${stats?.closestMatchup?.loser?.teamName} (${stats?.closestMatchup?.loser?.points}) - decided by only ${stats?.closestMatchup?.margin} pts!` : ''}
 
 ALL MATCHUPS TO RECAP IN THE WEEK LEDGER:
@@ -489,6 +604,12 @@ ${stats?.matchups?.map((m: any, i: number) => `Game ${i + 1}: ${m.winner.teamNam
 ${announcements ? `COMMISSIONER ANNOUNCEMENTS TO INCLUDE:\n${announcements}\n` : ''}
 ${duesNote ? `LEAGUE DUES / TREASURY NOTE TO INCLUDE:\n${duesNote}\n` : ''}
 
+${
+  !isSidePotEnabled
+    ? `SIDE POT POLICY: The weekly side pot is DISABLED / NOT opted-in for this league. DO NOT generate a Side Pot Desk section, and do NOT mention side pot entry fees or payouts.`
+    : `SIDE POT ACTIVE: Total pot ($${(sidePotConfig?.totalPot || 25).toFixed(2)}), #1 Points winner ($${(sidePotConfig?.pointsWinnerPayout || 12.5).toFixed(2)}), Biggest Blowout ($${(sidePotConfig?.blowoutWinnerPayout || 12.5).toFixed(2)}), Next week fee ($${sidePotConfig?.entryFee || 5}).`
+}
+
 SECTIONS TO GENERATE (INCLUDE ALL OF THESE EXACT HEADERS):
 1. THE REST OF WEEK ${week}:
    - Blowout of the Week: Scores, margin, and a biting commentary ("That's not a matchup—that's a wellness check")
@@ -496,29 +617,31 @@ SECTIONS TO GENERATE (INCLUDE ALL OF THESE EXACT HEADERS):
    - Galaxy Brain Move: Best tactical start, dual QBs in Superflex, or sleeper explosion
 2. LEAD HEADLINE & STORY: (e.g. "[GM] OPENS THE SEASON WITH A STATEMENT" - breakdown of the scoring crown)
 3. MONDAY NIGHT FALLOUT: How Monday night numbers changed the scoreboard and locked in final margins
-4. THE UNLUCKY BASTARD CLUB: Induction of the highest-scoring loser with their bad beat recap and $12.50 side-pot payout
+4. THE UNLUCKY BASTARD CLUB: Induction of the highest-scoring loser with their bad beat recap${isSidePotEnabled ? ' and side-pot payout' : ''}
 5. THE WEEK ${week} LEDGER: Table with WINNER | PTS | LOSER | PTS | RECAP (each game gets a sharp, hilarious excuse/recap one-liner!)
 6. FINAL POINTS LEADERBOARD: Table ranked 1 to 12 purely by total points scored with Record
-7. SIDE POT DESK: Total pot ($25.00), #1 Points winner ($12.50), Biggest Blowout winner ($12.50), Next week fee due before TNF
+${isSidePotEnabled ? `7. SIDE POT DESK: Total pot ($${(sidePotConfig?.totalPot || 25).toFixed(2)}), #1 Points winner ($${(sidePotConfig?.pointsWinnerPayout || 12.5).toFixed(2)}), Biggest Blowout winner ($${(sidePotConfig?.blowoutWinnerPayout || 12.5).toFixed(2)}), Next week fee due before TNF` : ''}
 8. POWER RANKINGS: "Subjective. Unapologetic. Based on one week of evidence." Ranks 1 to 12 with a witty, biting one-sentence rationale for every single manager
 9. THE COMMISSIONER'S NOTEBOOK:
    - FRAUD WATCH (team that looked terrifying on paper but failed)
    - STOCK UP (hot contenders)
    - STOCK DOWN (sub-100 scorers or cold stars)
    - GALAXY BRAIN MOVE
-   - BONEHEAD MOVE (bench blunder / dud start)
+   - BONEHEAD MOVE / HINDSIGHT DESK (Roast the start/sit blunder with creative, varied phrasing! Never use the exact same sentence template or repetitive formula. Use angles like the agonizing "what-if", sleepless nights over a benched boom, how swapping the bench player in would have flipped the loss into an outright win or trimmed a beatdown, or sarcastic film-room breakdown of points left on the pine.)
    - LEAGUE CANON (narratives, rivalries, and lore)
    - AROUND THE LEAGUE (scoring trends, high averages)
-   - WEEK WARNING (side pot fee & TNF deadline: "Pay your damn five dollars")
+   - WEEK WARNING (${isSidePotEnabled ? `side pot fee & TNF deadline: "Pay your damn five dollars"` : `lineup check & waiver deadlines before Thursday Night Football kickoff`})
 10. FINAL WORD: Authoritative, punchy commissioner closing statement
 
 FORMATTING:
 Output clean, beautifully formatted Markdown with bold titles, markdown tables, and crisp structure. Make it ready to copy-paste directly into Sleeper league chat or Discord.
 CRITICAL OUTPUT INSTRUCTIONS:
+- Whenever referencing players on a team, mention the top-ranked players on the roster instead of random players.
 - NEVER print any label like "Tone:", "*Tone: ROAST*", "Tone Requirements:", or "Tone Guidelines:".
 - NEVER output meta-instructions, preamble phrases (e.g. "Here is your report:"), or conversational filler.
 - The output must dive directly into the report content without echoing prompt rules.
 `;
+      }
     }
 
     let generatedText: string | undefined;
@@ -570,6 +693,25 @@ ${duesNote ? `### 💰 League Dues & FAAB Bounties\n${duesNote}\n` : ''}
 
 ## 🪜 WEEK ${week} SURVIVOR STANDINGS
 ${c.allRankedTeams?.map((t: any, idx: number) => `${idx + 1}. ${t.rosterId === c.choppedTeam?.rosterId ? '💀' : idx === 0 ? '👑' : '🛡️'} **${t.teamName}** (${t.ownerName}) - **${t.points} pts** ${t.rosterId === c.choppedTeam?.rosterId ? '*(🪓 CHOPPED)*' : '*(SURVIVED)*'}`).join('\n')}
+
+---
+*Generated by Fantasy Commissioner Notes using Sleeper API*`;
+      } else if (Boolean(stats && (stats.hasStarted === false || (stats.totalScore !== undefined && stats.totalScore === 0)))) {
+        generatedText = `# 🏈 ${leagueName} - Week ${week} Matchup Preview & Pre-Game Report
+
+Games for Week ${week} have not been played yet on Sleeper. All teams sit tied at 0.00 points awaiting kickoff. Lineups are being finalized across the league, and matchups are locked in for battle.
+
+${announcements ? `### 📢 League Announcements\n${announcements}\n` : ''}
+${duesNote ? `### 💰 League Treasury Notice\n${duesNote}\n` : ''}
+
+## ⚔️ Scheduled Week ${week} Head-to-Head Clashes
+${stats?.matchups?.map((m: any, i: number) => `### Matchup ${i + 1}: ${m.teamA.teamName} (${m.teamA.ownerName}) vs ${m.teamB.teamName} (${m.teamB.ownerName})
+> **Status:** Scheduled (0.00 pts) | Starters locking at game time.`).join('\n\n') || 'All league matchups scheduled.'}
+
+## 📋 Pre-Game Checklist
+- Check injury designations and active/inactive reports before kickoff.
+- Finalize your flex spots and reserve late slots for Sunday/Monday players.
+- Best of luck to all managers in Week ${week}!
 
 ---
 *Generated by Fantasy Commissioner Notes using Sleeper API*`;

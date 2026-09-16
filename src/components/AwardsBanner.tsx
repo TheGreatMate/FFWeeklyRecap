@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, HeartCrack, Trophy, Zap, AlertTriangle, TrendingUp, Skull } from 'lucide-react';
+import { Flame, HeartCrack, Trophy, Zap, AlertTriangle, TrendingUp, Skull, Calendar } from 'lucide-react';
 import { WeekStats } from '../types';
 
 interface AwardsBannerProps {
@@ -9,6 +9,22 @@ interface AwardsBannerProps {
 
 export const AwardsBanner: React.FC<AwardsBannerProps> = ({ stats, leagueName }) => {
   const { biggestBlowout, highestScoringLoser, highestScorer, lowestScorer, closestMatchup, averageScore, week } = stats;
+
+  if (stats.hasStarted === false) {
+    return (
+      <div className="rounded-2xl bg-slate-900 border border-slate-800 p-6 shadow-xl text-center">
+        <div className="inline-flex p-3 rounded-xl bg-slate-800/80 text-amber-400 border border-slate-700/60 mb-2">
+          <Calendar className="w-5 h-5" />
+        </div>
+        <h3 className="text-base font-bold text-white">
+          Week {week} Matchups Scheduled
+        </h3>
+        <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+          Games for Week {week} have not commenced yet on Sleeper. Weekly awards, blowouts, and top scorers will activate as soon as scores are posted.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

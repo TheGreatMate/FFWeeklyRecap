@@ -83,6 +83,8 @@ export interface CompactPlayer {
   name: string;
   pos?: string;
   team?: string;
+  searchRank?: number;
+  points?: number;
 }
 
 export interface TeamInfo {
@@ -100,6 +102,9 @@ export interface TeamInfo {
   startersPoints: number[];
   benchPoints: number;
   playersPoints: Record<string, number>;
+  allPlayerIds?: string[];
+  allPlayerDetails?: CompactPlayer[];
+  topRankedPlayers?: CompactPlayer[];
 }
 
 export interface HeadToHeadMatchup {
@@ -113,10 +118,31 @@ export interface HeadToHeadMatchup {
   totalCombinedScore: number;
 }
 
+export interface PositionalBenchBlunder {
+  manager: string;
+  teamName: string;
+  avatarUrl?: string;
+  position: string;
+  benchPlayerName: string;
+  benchPlayerPoints: number;
+  starterPlayerName: string;
+  starterPlayerPoints: number;
+  pointsDifference: number;
+  matchupMargin?: number;
+  opponentName?: string;
+  wouldHaveWonMatchup?: boolean;
+  blurb: string;
+  headline?: string;
+  flavorTag?: string;
+  alternativeBlurbs?: string[];
+}
+
 export interface WeekStats {
   week: number;
   totalMatchups: number;
   totalTeams: number;
+  hasStarted?: boolean;
+  totalScore?: number;
   highestScorer: TeamInfo | null;
   lowestScorer: TeamInfo | null;
   biggestBlowout: HeadToHeadMatchup | null;
@@ -136,6 +162,8 @@ export interface WeekStats {
     team: TeamInfo;
     benchPoints: number;
   }[];
+  positionalBlunders?: PositionalBenchBlunder[];
+  topPositionalBlunder?: PositionalBenchBlunder | null;
 }
 
 export type LeagueFormat = 'head_to_head' | 'chopped' | 'best_ball';
@@ -156,6 +184,7 @@ export interface ChoppedWeekStats {
   medianScore: number;
   choppedRosterStarters: string[];
   choppedRosterDetails?: CompactPlayer[];
+  topRankedChoppedPlayers?: CompactPlayer[];
 }
 
 export type NoteTone =
@@ -183,6 +212,7 @@ export interface GazetteReportData {
   date: string;
   editionTag: string;
   motto: string;
+  isUpcoming?: boolean;
   leadHeadline: string;
   leadStory: string;
   gmOfTheWeek: {
@@ -292,4 +322,6 @@ export interface GazetteReportData {
     nextWeekWarning: string;
     finalWord: string;
   };
+  topPositionalBlunder?: PositionalBenchBlunder | null;
+  positionalBlunders?: PositionalBenchBlunder[];
 }

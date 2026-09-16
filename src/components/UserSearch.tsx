@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { Search, Loader2, User, AlertCircle, Sparkles } from 'lucide-react';
+import { Search, Loader2, User, AlertCircle, Calendar } from 'lucide-react';
 import { SleeperUser } from '../types';
 
 interface UserSearchProps {
-  onSearchUser: (username: string) => Promise<void>;
+  onSearchUser: (usernameOrLeagueId: string) => Promise<void>;
   isLoading: boolean;
   user: SleeperUser | null;
   error: string | null;
   currentUsername: string;
+  season: string;
+  onSeasonChange: (season: string) => void;
   onClear: () => void;
 }
 
@@ -17,6 +19,8 @@ export const UserSearch: React.FC<UserSearchProps> = ({
   user,
   error,
   currentUsername,
+  season,
+  onSeasonChange,
   onClear,
 }) => {
   const [inputVal, setInputVal] = useState(currentUsername);
@@ -36,27 +40,44 @@ export const UserSearch: React.FC<UserSearchProps> = ({
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-            <span>Find Your Sleeper Leagues</span>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-              NFL 2026
-            </span>
-          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              <span>Find Your Sleeper Leagues</span>
+            </h2>
+            {/* Season Selector Chips */}
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+              {['2026', '2025', '2024'].map((yr) => (
+                <button
+                  key={yr}
+                  type="button"
+                  id={`season-select-${yr}`}
+                  onClick={() => onSeasonChange(yr)}
+                  className={`px-2.5 py-0.5 text-xs font-semibold rounded-md transition-all ${
+                    season === yr
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  }`}
+                >
+                  NFL {yr}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="text-xs text-slate-400 mt-1">
-            Enter your Sleeper handle to load your leagues, calculate Week 1 blowouts, and craft notes.
+            Enter your Sleeper username or Sleeper League ID to load your real rosters, matchups, and scores.
           </p>
         </div>
 
         {/* Quick Suggestion Chips */}
         <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-400">
-          <span className="text-slate-500 mr-1">Suggestions:</span>
-          {['FantasyChamp', 'matt', 'commish'].map((s) => (
+          <span className="text-slate-500 mr-1">Quick search:</span>
+          {['FantasyChamp', 'Commish', 'gridiron'].map((s) => (
             <button
               key={s}
               type="button"
               id={`quick-suggest-${s}`}
               onClick={() => handleQuickPick(s)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors"
+              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors font-medium"
             >
               @{s}
             </button>
@@ -74,7 +95,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            placeholder="Enter Sleeper Username (e.g. FantasyChamp)"
+            placeholder="Enter Sleeper Username (e.g. FantasyChamp) or League ID"
             className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm font-medium transition-all"
           />
         </div>
@@ -106,7 +127,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
           <div>
             <p className="font-medium">{error}</p>
             <p className="text-xs text-rose-400/80 mt-0.5">
-              Check the username spelling, or try the <strong>Try Demo League</strong> button above to preview with instant sample data.
+              Check the username or season, or paste your Sleeper League ID directly.
             </p>
           </div>
         </div>

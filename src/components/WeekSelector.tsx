@@ -1,9 +1,11 @@
 import React from 'react';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Columns2 } from 'lucide-react';
 
 interface WeekSelectorProps {
   currentWeek: number;
   onSelectWeek: (week: number) => void;
+  isDualWeek?: boolean;
+  onToggleDualWeek?: () => void;
   maxWeek?: number;
   disabled?: boolean;
   isChopped?: boolean;
@@ -13,6 +15,8 @@ interface WeekSelectorProps {
 export const WeekSelector: React.FC<WeekSelectorProps> = ({
   currentWeek,
   onSelectWeek,
+  isDualWeek = false,
+  onToggleDualWeek,
   maxWeek = 18,
   disabled = false,
   isChopped = false,
@@ -61,7 +65,7 @@ export const WeekSelector: React.FC<WeekSelectorProps> = ({
           onClick={() => onSelectWeek(1)}
           disabled={disabled}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            currentWeek === 1
+            !isDualWeek && currentWeek === 1
               ? isChopped
                 ? 'bg-rose-600 text-white shadow-md shadow-rose-900/30 ring-1 ring-rose-400/40'
                 : 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/40'
@@ -78,7 +82,7 @@ export const WeekSelector: React.FC<WeekSelectorProps> = ({
           onClick={() => onSelectWeek(2)}
           disabled={disabled}
           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-            currentWeek === 2
+            !isDualWeek && currentWeek === 2
               ? isChopped
                 ? 'bg-rose-600 text-white shadow-md shadow-rose-900/30 ring-1 ring-rose-400/40'
                 : 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30 ring-1 ring-emerald-400/40'
@@ -88,6 +92,26 @@ export const WeekSelector: React.FC<WeekSelectorProps> = ({
         >
           <span>Wk 2</span>
         </button>
+
+        {onToggleDualWeek && (
+          <button
+            type="button"
+            id="week-pill-both"
+            onClick={onToggleDualWeek}
+            disabled={disabled}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              isDualWeek
+                ? isChopped
+                  ? 'bg-rose-600 text-white shadow-md shadow-rose-900/30 ring-1 ring-rose-400/40'
+                  : 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30 ring-1 ring-indigo-400/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
+            }`}
+            title="Look at both Weeks 1 & 2 side-by-side"
+          >
+            <Columns2 className="w-3 h-3" />
+            <span>Both (1 & 2)</span>
+          </button>
+        )}
       </div>
 
       {/* Divider */}

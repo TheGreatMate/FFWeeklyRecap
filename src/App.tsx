@@ -11,6 +11,7 @@ import {
   Shield,
   Layers,
   Newspaper,
+  Columns2,
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { UserSearch } from './components/UserSearch';
@@ -20,6 +21,7 @@ import { MatchupScoreboard } from './components/MatchupScoreboard';
 import { NotesGenerator } from './components/NotesGenerator';
 import { ChoppedBanner } from './components/ChoppedBanner';
 import { ChoppedLeaderboard } from './components/ChoppedLeaderboard';
+import { DualWeekComparison } from './components/DualWeekComparison';
 import {
   SleeperUser,
   SleeperLeague,
@@ -52,9 +54,21 @@ import { SLEEPER_PLAYERS_MAP } from './data/sleeperPlayers';
 import { WeekSelector } from './components/WeekSelector';
 
 export default function App() {
-  const SEASON = '2026';
+  const [season, setSeason] = useState<string>('2026');
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
   const [username, setUsername] = useState<string>('');
+
+  // Auto-detect latest NFL season from Sleeper state
+  useEffect(() => {
+    fetch('/api/sleeper/state')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((state) => {
+        if (state?.season) {
+          setSeason(String(state.season));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // User state
   const [user, setUser] = useState<SleeperUser | null>(null);
@@ -75,8 +89,15 @@ export default function App() {
   const [choppedStats, setChoppedStats] = useState<ChoppedWeekStats | null>(null);
   const [playersMap, setPlayersMap] = useState<Record<string, CompactPlayer>>(SLEEPER_PLAYERS_MAP);
 
+  // Cached stats for Weeks 1 & 2 dual comparison
+  const [week1Stats, setWeek1Stats] = useState<WeekStats | null>(null);
+  const [week2Stats, setWeek2Stats] = useState<WeekStats | null>(null);
+  const [choppedWeek1Stats, setChoppedWeek1Stats] = useState<ChoppedWeekStats | null>(null);
+  const [choppedWeek2Stats, setChoppedWeek2Stats] = useState<ChoppedWeekStats | null>(null);
+  const [isDualWeek, setIsDualWeek] = useState<boolean>(false);
+
   // Active view tab when league is selected
-  const [activeTab, setActiveTab] = useState<'notes' | 'breakdown'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'breakdown' | 'dual'>('notes');
   const [isDemoActive, setIsDemoActive] = useState<boolean>(false);
 
   // Helper to fetch Sleeper data (tries backend proxy first, then direct Sleeper API fallback)
@@ -101,9 +122,9 @@ export default function App() {
     return data;
   };
 
-  const fetchUserLeagues = async (userId: string): Promise<SleeperLeague[]> => {
+  const fetchUserLeagues = async (userId: string, seasonToFetch = season): Promise<SleeperLeague[]> => {
     try {
-      const res = await fetch(`/api/sleeper/user/${userId}/leagues/${SEASON}`);
+      const res = await fetch(`/api/sleeper/user/${userId}/leagues/${seasonToFetch}`);
       if (res.ok) {
         return await res.json();
       }
@@ -111,7 +132,7 @@ export default function App() {
       console.warn('Backend proxy leagues failed, trying direct Sleeper API...');
     }
 
-    const directRes = await fetch(`https://api.sleeper.app/v1/user/${userId}/leagues/nfl/${SEASON}`);
+    const directRes = await fetch(`https://api.sleeper.app/v1/user/${userId}/leagues/nfl/${seasonToFetch}`);
     if (!directRes.ok) {
       return [];
     }
@@ -134,6 +155,8 @@ export default function App() {
         const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP);
         setChoppedStats(cStats);
         setWeekStats(null);
+        if (week === 1) setChoppedWeek1Stats(cStats);
+        if (week === 2) setChoppedWeek2Stats(cStats);
         setIsLoadingMatchups(false);
         return;
       }
@@ -145,6 +168,8 @@ export default function App() {
         const hStats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP);
         setWeekStats(hStats);
         setChoppedStats(null);
+        if (week === 1) setWeek1Stats(hStats);
+        if (week === 2) setWeek2Stats(hStats);
         setIsLoadingMatchups(false);
         return;
       }
@@ -213,32 +238,36 @@ export default function App() {
       const detectedFormat = detectLeagueFormat(league, matchups);
       setLeagueFormat(detectedFormat);
 
+      // If no matchups or no points recorded yet for this week, do NOT show fake demo data
       if (!matchups || matchups.length === 0) {
         setMatchupError(
-          `No matchup score data found for Week ${week} in this league yet. Games may not have started yet, or scores have not been posted.`
+          `No matchup score data found for Week ${week} in "${league.name}" on Sleeper yet. Games may not have started yet, or scores have not been posted.`
         );
+        setWeekStats(null);
+        setChoppedStats(null);
+        if (week === 1) {
+          setWeek1Stats(null);
+          setChoppedWeek1Stats(null);
+        }
+        if (week === 2) {
+          setWeek2Stats(null);
+          setChoppedWeek2Stats(null);
+        }
+        return;
+      }
 
-        if (detectedFormat === 'chopped') {
-          const fallbackMatchups = week === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
-          const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, fallbackMatchups, week, currentPlayers);
-          setChoppedStats(cStats);
-          setWeekStats(null);
-        } else {
-          const fallbackMatchups = week === 2 ? DEMO_MATCHUPS_WEEK_2 : DEMO_MATCHUPS_WEEK_1;
-          const calculated = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, fallbackMatchups, week, currentPlayers);
-          setWeekStats(calculated);
-          setChoppedStats(null);
-        }
+      if (detectedFormat === 'chopped') {
+        const cStats = calculateChoppedStats(rosters, users, matchups, week, currentPlayers);
+        setChoppedStats(cStats);
+        setWeekStats(null);
+        if (week === 1) setChoppedWeek1Stats(cStats);
+        if (week === 2) setChoppedWeek2Stats(cStats);
       } else {
-        if (detectedFormat === 'chopped') {
-          const cStats = calculateChoppedStats(rosters, users, matchups, week, currentPlayers);
-          setChoppedStats(cStats);
-          setWeekStats(null);
-        } else {
-          const calculated = calculateWeekStats(rosters, users, matchups, week, currentPlayers);
-          setWeekStats(calculated);
-          setChoppedStats(null);
-        }
+        const calculated = calculateWeekStats(rosters, users, matchups, week, currentPlayers);
+        setWeekStats(calculated);
+        setChoppedStats(null);
+        if (week === 1) setWeek1Stats(calculated);
+        if (week === 2) setWeek2Stats(calculated);
       }
     } catch (err: any) {
       console.error('Error fetching matchups:', err);
@@ -248,17 +277,42 @@ export default function App() {
     }
   };
 
-  // Search user function
-  const handleSearchUser = async (searchUsername: string) => {
+  // Search user or league ID function
+  const handleSearchUser = async (searchInput: string) => {
     setIsSearchingUser(true);
     setUserError(null);
     setSelectedLeague(null);
     setWeekStats(null);
     setChoppedStats(null);
-    setUsername(searchUsername);
+    setUsername(searchInput);
+
+    const trimmed = searchInput.trim();
+
+    // Check if input is a direct Sleeper League ID (typically 15-20 digits)
+    if (/^\d{15,}$/.test(trimmed)) {
+      try {
+        const res = await fetch(`/api/sleeper/league/${trimmed}`);
+        if (res.ok) {
+          const directLeague: SleeperLeague = await res.json();
+          if (directLeague && directLeague.league_id) {
+            setSelectedLeague(directLeague);
+            setLeagues([directLeague]);
+            setIsDualWeek(false);
+            if (directLeague.season) {
+              setSeason(directLeague.season);
+            }
+            await fetchLeagueMatchupData(directLeague, selectedWeek);
+            setIsSearchingUser(false);
+            return;
+          }
+        }
+      } catch (err: any) {
+        console.warn('Failed to load league ID directly:', err);
+      }
+    }
 
     // If searching demo
-    if (searchUsername.toLowerCase() === 'fantasychamp') {
+    if (trimmed.toLowerCase() === 'fantasychamp') {
       handleLoadDemo();
       setIsSearchingUser(false);
       return;
@@ -266,35 +320,82 @@ export default function App() {
 
     try {
       // Step 1: Use Sleeper API to find User ID
-      const userData = await fetchSleeperUser(searchUsername);
+      const userData = await fetchSleeperUser(trimmed);
       setUser(userData);
 
-      // Step 2: Use User ID to fetch 2026 NFL leagues
-      const userLeagues = await fetchUserLeagues(userData.user_id);
+      // Step 2: Use User ID to fetch leagues for the active season
+      let userLeagues = await fetchUserLeagues(userData.user_id, season);
+      let foundSeason = season;
+
+      // If no leagues found in active season, search recent seasons (2026, 2025, 2024)
+      if (userLeagues.length === 0) {
+        for (const altSeason of ['2026', '2025', '2024']) {
+          if (altSeason === season) continue;
+          const altLeagues = await fetchUserLeagues(userData.user_id, altSeason);
+          if (altLeagues.length > 0) {
+            userLeagues = altLeagues;
+            foundSeason = altSeason;
+            setSeason(altSeason);
+            break;
+          }
+        }
+      }
+
       setLeagues(userLeagues);
 
       if (userLeagues.length === 0) {
-        setUserError(`No leagues found for ${searchUsername} in the 2026 NFL season.`);
+        setUserError(`No leagues found for ${trimmed} in the ${season} NFL season. Try switching the season above or paste your Sleeper League ID.`);
+      } else if (userLeagues.length === 1) {
+        handleSelectLeague(userLeagues[0]);
       }
     } catch (err: any) {
       console.error('Search error:', err);
       setUser(null);
       setLeagues([]);
-      setUserError(err.message || 'User not found! Check your spelling.');
+      setUserError(err.message || 'User not found! Check your spelling or Sleeper handle.');
     } finally {
       setIsSearchingUser(false);
+    }
+  };
+
+  const handleSeasonChange = async (newSeason: string) => {
+    setSeason(newSeason);
+    if (user && user.user_id) {
+      setIsSearchingUser(true);
+      try {
+        const userLeagues = await fetchUserLeagues(user.user_id, newSeason);
+        setLeagues(userLeagues);
+        if (userLeagues.length === 0) {
+          setUserError(`No leagues found for @${user.username} in the ${newSeason} season.`);
+        } else {
+          setUserError(null);
+          // Auto-select first league if previously selected league doesn't belong to this season
+          if (selectedLeague && selectedLeague.season !== newSeason) {
+            handleSelectLeague(userLeagues[0]);
+          }
+        }
+      } catch (err: any) {
+        console.warn('Error fetching leagues for season:', err);
+      } finally {
+        setIsSearchingUser(false);
+      }
     }
   };
 
   // Click on a league button
   const handleSelectLeague = (league: SleeperLeague) => {
     setSelectedLeague(league);
+    setIsDualWeek(false);
     fetchLeagueMatchupData(league, selectedWeek);
   };
 
   // User changes the active NFL week
   const handleWeekChange = (newWeek: number) => {
     setSelectedWeek(newWeek);
+    setIsDualWeek(false);
+    if (activeTab === 'dual') {
+      setActiveTab('notes');
+    }
     if (selectedLeague) {
       fetchLeagueMatchupData(selectedLeague, newWeek);
     } else if (isDemoActive) {
@@ -302,6 +403,67 @@ export default function App() {
         handleLoadChoppedDemo(newWeek);
       } else {
         handleLoadDemo(newWeek);
+      }
+    }
+  };
+
+  // Toggle dual week comparison
+  const handleToggleDualWeek = async () => {
+    setIsDualWeek(true);
+    setActiveTab('dual');
+
+    // If a real league is selected, ensure both week 1 and week 2 data are loaded
+    if (selectedLeague && !isDemoActive && selectedLeague.league_id !== DEMO_LEAGUE.league_id && selectedLeague.league_id !== DEMO_CHOPPED_LEAGUE.league_id) {
+      const needsWeek1 = !week1Stats && !choppedWeek1Stats;
+      const needsWeek2 = !week2Stats && !choppedWeek2Stats;
+
+      if (needsWeek1 || needsWeek2) {
+        setIsLoadingMatchups(true);
+        try {
+          const fetchTasks: Promise<void>[] = [];
+
+          if (needsWeek1) {
+            fetchTasks.push(
+              fetch(`/api/sleeper/league/${selectedLeague.league_id}/details/1`)
+                .then(r => r.ok ? r.json() : null)
+                .then(d1 => {
+                  if (d1 && d1.matchups && d1.matchups.length > 0) {
+                    const fmt = detectLeagueFormat(selectedLeague, d1.matchups);
+                    if (fmt === 'chopped') {
+                      setChoppedWeek1Stats(calculateChoppedStats(d1.rosters, d1.users, d1.matchups, 1, playersMap));
+                    } else {
+                      setWeek1Stats(calculateWeekStats(d1.rosters, d1.users, d1.matchups, 1, playersMap));
+                    }
+                  }
+                })
+            );
+          }
+
+          if (needsWeek2) {
+            fetchTasks.push(
+              fetch(`/api/sleeper/league/${selectedLeague.league_id}/details/2`)
+                .then(r => r.ok ? r.json() : null)
+                .then(d2 => {
+                  if (d2 && d2.matchups && d2.matchups.length > 0) {
+                    const fmt = detectLeagueFormat(selectedLeague, d2.matchups);
+                    if (fmt === 'chopped') {
+                      setChoppedWeek2Stats(calculateChoppedStats(d2.rosters, d2.users, d2.matchups, 2, playersMap));
+                    } else {
+                      setWeek2Stats(calculateWeekStats(d2.rosters, d2.users, d2.matchups, 2, playersMap));
+                    }
+                  }
+                })
+            );
+          }
+
+          if (fetchTasks.length > 0) {
+            await Promise.all(fetchTasks);
+          }
+        } catch (e) {
+          console.warn('Error pre-loading dual week stats:', e);
+        } finally {
+          setIsLoadingMatchups(false);
+        }
       }
     }
   };
@@ -320,6 +482,12 @@ export default function App() {
     const stats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, matchups, weekToLoad, SLEEPER_PLAYERS_MAP);
     setWeekStats(stats);
     setChoppedStats(null);
+
+    // Populate both weeks 1 & 2 for instantaneous dual comparison
+    const w1 = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, DEMO_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
+    const w2 = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, DEMO_MATCHUPS_WEEK_2, 2, SLEEPER_PLAYERS_MAP);
+    setWeek1Stats(w1);
+    setWeek2Stats(w2);
   };
 
   // Load Demo Chopped / Guillotine League
@@ -336,6 +504,12 @@ export default function App() {
     const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, matchups, weekToLoad, SLEEPER_PLAYERS_MAP);
     setChoppedStats(cStats);
     setWeekStats(null);
+
+    // Populate both weeks 1 & 2 for instantaneous dual comparison
+    const c1 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
+    const c2 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_2, 2, SLEEPER_PLAYERS_MAP);
+    setChoppedWeek1Stats(c1);
+    setChoppedWeek2Stats(c2);
   };
 
   // Auto-load demo on initial load so the app greets the user with immediate visual proof and interactivity
@@ -353,6 +527,9 @@ export default function App() {
         isDemoActive={isDemoActive}
         selectedWeek={selectedWeek}
         onSelectWeek={handleWeekChange}
+        isDualWeek={isDualWeek}
+        onToggleDualWeek={handleToggleDualWeek}
+        isChopped={isChoppedMode}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -404,6 +581,8 @@ export default function App() {
           user={user}
           error={userError}
           currentUsername={username}
+          season={season}
+          onSeasonChange={handleSeasonChange}
           onClear={() => {
             setUser(null);
             setLeagues([]);
@@ -503,6 +682,8 @@ export default function App() {
                   <WeekSelector
                     currentWeek={selectedWeek}
                     onSelectWeek={handleWeekChange}
+                    isDualWeek={isDualWeek}
+                    onToggleDualWeek={handleToggleDualWeek}
                     disabled={isLoadingMatchups}
                     isChopped={isChoppedMode}
                   />
@@ -513,7 +694,10 @@ export default function App() {
                   <button
                     type="button"
                     id="tab-notes-btn"
-                    onClick={() => setActiveTab('notes')}
+                    onClick={() => {
+                      setActiveTab('notes');
+                      setIsDualWeek(false);
+                    }}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       activeTab === 'notes'
                         ? isChoppedMode
@@ -528,7 +712,10 @@ export default function App() {
                   <button
                     type="button"
                     id="tab-matchups-btn"
-                    onClick={() => setActiveTab('breakdown')}
+                    onClick={() => {
+                      setActiveTab('breakdown');
+                      setIsDualWeek(false);
+                    }}
                     className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       activeTab === 'breakdown'
                         ? isChoppedMode
@@ -549,16 +736,34 @@ export default function App() {
                       </>
                     )}
                   </button>
+                  <button
+                    type="button"
+                    id="tab-dual-btn"
+                    onClick={handleToggleDualWeek}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'dual'
+                        ? isChoppedMode
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                    title="Look at both Weeks 1 & 2 side-by-side"
+                  >
+                    <Columns2 className="w-3.5 h-3.5" />
+                    <span>Weeks 1 & 2 Dual View</span>
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Top Spotlight: Chopped Banner vs Standard Awards Banner */}
-            {isChoppedMode && choppedStats ? (
-              <ChoppedBanner stats={choppedStats} leagueName={selectedLeague.name} />
-            ) : weekStats ? (
-              <AwardsBanner stats={weekStats} leagueName={selectedLeague.name} />
-            ) : null}
+            {/* Top Spotlight: Chopped Banner vs Standard Awards Banner (hidden in dual mode to prioritize comparison cards) */}
+            {activeTab !== 'dual' && (
+              isChoppedMode && choppedStats ? (
+                <ChoppedBanner stats={choppedStats} leagueName={selectedLeague.name} />
+              ) : weekStats ? (
+                <AwardsBanner stats={weekStats} leagueName={selectedLeague.name} />
+              ) : null
+            )}
 
             {/* Tab 1: Commissioner Notes / Execution Report Generator */}
             {activeTab === 'notes' && (
@@ -569,6 +774,8 @@ export default function App() {
                 choppedStats={choppedStats}
                 selectedWeek={selectedWeek}
                 onSelectWeek={handleWeekChange}
+                isDualWeek={isDualWeek}
+                onToggleDualWeek={handleToggleDualWeek}
               />
             )}
 
@@ -584,6 +791,26 @@ export default function App() {
                   closestMatchupId={weekStats.closestMatchup?.matchupId}
                 />
               ) : null
+            )}
+
+            {/* Tab 3: Dual Week 1 & 2 Comparison */}
+            {activeTab === 'dual' && (
+              <DualWeekComparison
+                leagueName={selectedLeague.name}
+                format={leagueFormat}
+                week1Stats={week1Stats}
+                week2Stats={week2Stats}
+                choppedWeek1Stats={choppedWeek1Stats}
+                choppedWeek2Stats={choppedWeek2Stats}
+                onSelectWeek={(w) => {
+                  handleWeekChange(w);
+                  setActiveTab('breakdown');
+                }}
+                onOpenGazette={(w) => {
+                  handleWeekChange(w);
+                  setActiveTab('notes');
+                }}
+              />
             )}
           </div>
         )}

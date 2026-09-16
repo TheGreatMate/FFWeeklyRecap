@@ -72,6 +72,53 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
     if (onUpdateData) onUpdateData(updated);
   };
 
+  const handleBlunderTextChange = (index: number, newBlurb: string) => {
+    if (!localData.positionalBlunders) return;
+    const updated = [...localData.positionalBlunders];
+    updated[index] = { ...updated[index], blurb: newBlurb };
+    const updatedData = { ...localData, positionalBlunders: updated };
+    if (index === 0) {
+      updatedData.topPositionalBlunder = updated[0];
+      if (updatedData.commissionerNotebook) {
+        updatedData.commissionerNotebook = {
+          ...updatedData.commissionerNotebook,
+          bonehead: newBlurb,
+        };
+      }
+    }
+    setLocalData(updatedData);
+    if (onUpdateData) onUpdateData(updatedData);
+  };
+
+  const handleShuffleBlunder = (index: number) => {
+    if (!localData.positionalBlunders) return;
+    const current = localData.positionalBlunders[index];
+    if (!current) return;
+    const pool = [current.blurb, ...(current.alternativeBlurbs || [])];
+    if (pool.length <= 1) return;
+    const currentIndex = pool.indexOf(current.blurb);
+    const nextIndex = (currentIndex + 1) % pool.length;
+    const nextBlurb = pool[nextIndex];
+
+    const updated = [...localData.positionalBlunders];
+    updated[index] = {
+      ...current,
+      blurb: nextBlurb,
+    };
+    const updatedData = { ...localData, positionalBlunders: updated };
+    if (index === 0) {
+      updatedData.topPositionalBlunder = updated[0];
+      if (updatedData.commissionerNotebook) {
+        updatedData.commissionerNotebook = {
+          ...updatedData.commissionerNotebook,
+          bonehead: nextBlurb,
+        };
+      }
+    }
+    setLocalData(updatedData);
+    if (onUpdateData) onUpdateData(updatedData);
+  };
+
   const handlePrint = () => {
     printGazetteElement('gazette-document');
   };
@@ -193,18 +240,26 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                 </h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {/* Card 1: Blowout of the Week */}
+                  {/* Card 1: Blowout of the Week or Scheduled Marquee Clash */}
                   <div className="border border-slate-200 rounded-sm p-3 bg-slate-50/60 flex flex-col justify-between">
                     <div>
                       <div className="flex items-center justify-between text-xs font-black text-slate-900 mb-1 border-b border-slate-200 pb-1">
-                        <span>Blowout of the Week</span>
-                        <Flame className="w-3.5 h-3.5 text-rose-600" />
+                        <span>{localData.isUpcoming ? 'Scheduled Marquee Clash' : 'Blowout of the Week'}</span>
+                        {localData.isUpcoming ? (
+                          <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                        ) : (
+                          <Flame className="w-3.5 h-3.5 text-rose-600" />
+                        )}
                       </div>
                       <div className="text-xs font-bold text-slate-800">
-                        {localData.blowoutOfTheWeek.winner} {localData.blowoutOfTheWeek.winnerPts} | {localData.blowoutOfTheWeek.loser} {localData.blowoutOfTheWeek.loserPts}
+                        {localData.isUpcoming
+                          ? `${localData.blowoutOfTheWeek.winner} vs ${localData.blowoutOfTheWeek.loser}`
+                          : `${localData.blowoutOfTheWeek.winner} ${localData.blowoutOfTheWeek.winnerPts} | ${localData.blowoutOfTheWeek.loser} ${localData.blowoutOfTheWeek.loserPts}`}
                       </div>
                       <div className="text-[11px] font-semibold text-rose-700 mt-0.5">
-                        {localData.blowoutOfTheWeek.margin} point margin
+                        {localData.isUpcoming
+                          ? `Awaiting Week ${localData.week} Kickoff`
+                          : `${localData.blowoutOfTheWeek.margin} point margin`}
                       </div>
                       <p className="text-[11px] text-slate-600 leading-snug mt-1.5">
                         {localData.blowoutOfTheWeek.recap}
@@ -213,7 +268,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
 
                     <div className="mt-3 pt-2 border-t border-slate-200">
                       <div className="h-24 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-sm overflow-hidden relative flex items-center justify-around px-2 py-1 border border-slate-300">
-                        {/* Winner Team Avatar */}
+                        {/* Winner/Team A Avatar */}
                         <div className="flex flex-col items-center z-10">
                           <div className="relative">
                             <img
@@ -225,9 +280,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                               referrerPolicy="no-referrer"
                               className="w-12 h-12 rounded-full object-cover border-2 border-emerald-500 shadow-md bg-white"
                             />
-                            <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[9px] font-black px-1 rounded-full shadow">
-                              W
-                            </span>
+                            {!localData.isUpcoming && (
+                              <span className="absolute -top-1 -right-1 bg-emerald-600 text-white text-[9px] font-black px-1 rounded-full shadow">
+                                W
+                              </span>
+                            )}
                           </div>
                           <span className="text-[9px] font-bold text-slate-200 mt-1 max-w-[70px] truncate text-center">
                             {localData.blowoutOfTheWeek.winner}
@@ -237,14 +294,14 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         {/* Center Score / Defeat Stamp */}
                         <div className="flex flex-col items-center justify-center z-10 px-1 text-center">
                           <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider">
-                            +{localData.blowoutOfTheWeek.margin} PT
+                            {localData.isUpcoming ? 'VS' : `+${localData.blowoutOfTheWeek.margin} PT`}
                           </span>
                           <span className="text-[8px] font-serif italic text-slate-400">
-                            BLOWOUT
+                            {localData.isUpcoming ? 'SCHEDULED' : 'BLOWOUT'}
                           </span>
                         </div>
 
-                        {/* Loser Team Avatar */}
+                        {/* Loser/Team B Avatar */}
                         <div className="flex flex-col items-center z-10">
                           <div className="relative">
                             <img
@@ -254,11 +311,15 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                               }
                               alt={localData.blowoutOfTheWeek.loser}
                               referrerPolicy="no-referrer"
-                              className="w-12 h-12 rounded-full object-cover border-2 border-rose-500/80 grayscale contrast-125 shadow-md bg-white"
+                              className={`w-12 h-12 rounded-full object-cover border-2 ${
+                                localData.isUpcoming ? 'border-indigo-400' : 'border-rose-500/80 grayscale contrast-125'
+                              } shadow-md bg-white`}
                             />
-                            <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[9px] font-black px-1 rounded-full shadow">
-                              L
-                            </span>
+                            {!localData.isUpcoming && (
+                              <span className="absolute -top-1 -right-1 bg-rose-600 text-white text-[9px] font-black px-1 rounded-full shadow">
+                                L
+                              </span>
+                            )}
                           </div>
                           <span className="text-[9px] font-bold text-slate-300 mt-1 max-w-[70px] truncate text-center">
                             {localData.blowoutOfTheWeek.loser}
@@ -510,29 +571,32 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
               <div className="grid grid-cols-3 gap-0 bg-slate-900 text-white text-[11px] font-bold mt-4">
                 <div className="p-2 border-r border-slate-700">
                   <span className="block text-[9px] uppercase tracking-wider text-slate-400">
-                    GAME OF THE WEEK
+                    {localData.isUpcoming ? 'FEATURED CLASH' : 'GAME OF THE WEEK'}
                   </span>
-                  <span className="font-semibold text-white">
-                    {localData.pointsLeaderboard[0]?.manager} {localData.pointsLeaderboard[0]?.points} •{' '}
-                    {localData.unluckyBastard?.manager || localData.pointsLeaderboard[1]?.manager}{' '}
-                    {localData.unluckyBastard?.points || localData.pointsLeaderboard[1]?.points}
+                  <span className="font-semibold text-white truncate block">
+                    {localData.isUpcoming
+                      ? `${localData.blowoutOfTheWeek.winner} vs ${localData.blowoutOfTheWeek.loser}`
+                      : `${localData.pointsLeaderboard[0]?.manager} ${localData.pointsLeaderboard[0]?.points} • ${localData.unluckyBastard?.manager || localData.pointsLeaderboard[1]?.manager} ${localData.unluckyBastard?.points || localData.pointsLeaderboard[1]?.points}`}
                   </span>
                 </div>
                 <div className="p-2 border-r border-slate-700">
                   <span className="block text-[9px] uppercase tracking-wider text-slate-400">
-                    BLOWOUT OF THE WEEK
+                    {localData.isUpcoming ? 'MATCHUP STATUS' : 'BLOWOUT OF THE WEEK'}
                   </span>
-                  <span className="font-semibold text-white">
-                    {localData.blowoutOfTheWeek.winner} {localData.blowoutOfTheWeek.winnerPts} def.{' '}
-                    {localData.blowoutOfTheWeek.loser} ({localData.blowoutOfTheWeek.margin} margin)
+                  <span className="font-semibold text-white truncate block">
+                    {localData.isUpcoming
+                      ? `Week ${localData.week} Kickoff Pending`
+                      : `${localData.blowoutOfTheWeek.winner} ${localData.blowoutOfTheWeek.winnerPts} def. ${localData.blowoutOfTheWeek.loser} (${localData.blowoutOfTheWeek.margin} margin)`}
                   </span>
                 </div>
                 <div className="p-2">
                   <span className="block text-[9px] uppercase tracking-wider text-slate-400">
-                    GM OF THE WEEK
+                    {localData.isUpcoming ? 'LINEUP ADVISORY' : 'GM OF THE WEEK'}
                   </span>
-                  <span className="font-semibold text-white">
-                    {localData.gmOfTheWeek.manager} ({localData.gmOfTheWeek.points} pts • {localData.gmOfTheWeek.record})
+                  <span className="font-semibold text-white truncate block">
+                    {localData.isUpcoming
+                      ? `Starters Lock at Kickoff`
+                      : `${localData.gmOfTheWeek.manager} (${localData.gmOfTheWeek.points} pts • ${localData.gmOfTheWeek.record})`}
                   </span>
                 </div>
               </div>
@@ -617,21 +681,23 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
             {/* Header */}
             <div className="mb-6">
               <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-slate-950">
-                THE WEEK {localData.week} LEDGER
+                {localData.isUpcoming ? `THE WEEK ${localData.week} SCHEDULE & MATCHUPS` : `THE WEEK ${localData.week} LEDGER`}
               </h2>
               <p className="text-xs font-serif italic text-slate-600 mt-0.5">
-                Every matchup. Every result. Every excuse.
+                {localData.isUpcoming
+                  ? 'Scheduled head-to-head clashes. Lineups lock at kickoff.'
+                  : 'Every matchup. Every result. Every excuse.'}
               </p>
             </div>
 
             {/* The Ledger Table */}
             <div className="border border-slate-300 mb-8 rounded-sm overflow-hidden">
               <div className="grid grid-cols-12 bg-slate-900 text-white font-bold text-[10px] uppercase tracking-wider px-3 py-2">
-                <span className="col-span-2">Winner</span>
+                <span className="col-span-2">{localData.isUpcoming ? 'Team 1' : 'Winner'}</span>
                 <span className="col-span-1 text-center">PTS</span>
-                <span className="col-span-2">Loser</span>
+                <span className="col-span-2">{localData.isUpcoming ? 'Team 2' : 'Loser'}</span>
                 <span className="col-span-1 text-center">PTS</span>
-                <span className="col-span-6 pl-2">Recap</span>
+                <span className="col-span-6 pl-2">{localData.isUpcoming ? 'Matchup Preview' : 'Recap'}</span>
               </div>
               <div className="divide-y divide-slate-200 text-xs">
                 {localData.matchupLedger.map((m, idx) => (
@@ -733,18 +799,20 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                 <div className="grid grid-cols-3 divide-x divide-red-200 bg-red-50/50 text-xs text-slate-900">
                   <div className="p-3">
                     <span className="block text-[10px] font-bold text-red-900 uppercase">
-                      WEEK {localData.week} TOTAL POT
+                      WEEK {localData.week} {localData.isUpcoming ? 'ACTIVE POT' : 'TOTAL POT'}
                     </span>
                     <span className="text-base font-black font-mono text-slate-900 block mt-0.5">
                       ${localData.sidePotDesk.totalPot.toFixed(2)}
                     </span>
                     <span className="text-[10px] text-slate-600">
-                      {localData.sidePotDesk.entriesCount} entries × ${localData.sidePotDesk.entryFee}
+                      {localData.isUpcoming
+                        ? `${localData.sidePotDesk.entriesCount} entries locked • Kickoff pending`
+                        : `${localData.sidePotDesk.entriesCount} entries × $${localData.sidePotDesk.entryFee}`}
                     </span>
                   </div>
 
                   <div className="p-3 flex items-center gap-2.5">
-                    {localData.sidePotDesk.pointsWinnerAvatarUrl && (
+                    {!localData.isUpcoming && localData.sidePotDesk.pointsWinnerAvatarUrl && (
                       <img
                         src={localData.sidePotDesk.pointsWinnerAvatarUrl}
                         alt={localData.sidePotDesk.pointsWinnerName}
@@ -754,10 +822,10 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     )}
                     <div className="min-w-0">
                       <span className="block text-[10px] font-bold text-red-900 uppercase">
-                        #1 POINTS
+                        {localData.isUpcoming ? '👑 #1 POINTS BOUNTY' : '#1 POINTS'}
                       </span>
                       <span className="text-sm font-bold text-slate-900 block mt-0.5 truncate">
-                        {localData.sidePotDesk.pointsWinnerName}
+                        {localData.isUpcoming ? 'Pending Kickoff' : localData.sidePotDesk.pointsWinnerName}
                       </span>
                       <span className="text-xs font-bold font-mono text-red-700">
                         ${localData.sidePotDesk.pointsPayout.toFixed(2)}
@@ -766,7 +834,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                   </div>
 
                   <div className="p-3 flex items-center gap-2.5">
-                    {localData.sidePotDesk.blowoutWinnerAvatarUrl && (
+                    {!localData.isUpcoming && localData.sidePotDesk.blowoutWinnerAvatarUrl && (
                       <img
                         src={localData.sidePotDesk.blowoutWinnerAvatarUrl}
                         alt={localData.sidePotDesk.blowoutWinnerName}
@@ -776,10 +844,10 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     )}
                     <div className="min-w-0">
                       <span className="block text-[10px] font-bold text-red-900 uppercase">
-                        BIGGEST BLOWOUT
+                        {localData.isUpcoming ? '💥 BLOWOUT BOUNTY' : 'BIGGEST BLOWOUT'}
                       </span>
                       <span className="text-sm font-bold text-slate-900 block mt-0.5 truncate">
-                        {localData.sidePotDesk.blowoutWinnerName}
+                        {localData.isUpcoming ? 'Pending Kickoff' : localData.sidePotDesk.blowoutWinnerName}
                       </span>
                       <span className="text-xs font-bold font-mono text-red-700">
                         ${localData.sidePotDesk.blowoutPayout.toFixed(2)}
@@ -789,8 +857,122 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                 </div>
 
                 <div className="bg-red-100/70 px-3 py-1.5 text-[11px] text-red-900 font-semibold border-t border-red-200 flex justify-between">
-                  <span>WEEK {localData.week + 1}: Entry fee: ${localData.sidePotDesk.nextWeekFee}</span>
-                  <span>Due before TNF kickoff</span>
+                  <span>
+                    {localData.isUpcoming
+                      ? `WEEK ${localData.week}: Side pot locked • Payouts awarded after MNF`
+                      : `WEEK ${localData.week + 1}: Entry fee: $${localData.sidePotDesk.nextWeekFee}`}
+                  </span>
+                  <span>{localData.isUpcoming ? 'All games pending' : 'Due before TNF kickoff'}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Hindsight 20/20: Positional Bench Regrets & "If Only..." Desk */}
+            {localData.positionalBlunders && localData.positionalBlunders.length > 0 && (
+              <div className="border-2 border-amber-500 rounded-sm overflow-hidden mb-6">
+                <div className="bg-amber-600 text-white px-3 py-1.5 flex items-center justify-between text-xs font-black uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <span>HINDSIGHT 20/20: BENCH REGRETS & "IF ONLY..." DESK</span>
+                  </div>
+                  <span className="text-[10px] bg-amber-800/80 px-1.5 py-0.5 rounded font-mono font-bold">
+                    {localData.positionalBlunders.length} MISMANAGED SPOTS
+                  </span>
+                </div>
+                <div className="divide-y divide-amber-200 bg-amber-50/40 text-xs">
+                  {localData.positionalBlunders.slice(0, 3).map((b, idx) => {
+                    const isFlipped = b.wouldHaveWonMatchup;
+                    const badgeClass = isFlipped
+                      ? 'bg-rose-600 text-white'
+                      : b.pointsDifference >= 15
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-900 text-amber-300';
+                    const tagLabel = b.flavorTag || (isFlipped ? 'MATCHUP FLIPPER' : `${b.position} SWAP`);
+
+                    return (
+                      <div key={idx} className="p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-2">
+                            {b.avatarUrl && (
+                              <img
+                                src={b.avatarUrl}
+                                alt={b.manager}
+                                referrerPolicy="no-referrer"
+                                className="w-5 h-5 rounded-full object-cover border border-amber-400 shrink-0 bg-white"
+                              />
+                            )}
+                            <span className="font-bold text-slate-900">{b.manager}</span>
+                            <span className="text-[11px] text-slate-500 font-medium">({b.teamName})</span>
+                            <span className="text-[9px] font-black bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded uppercase">
+                              {b.position}
+                            </span>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wide ${badgeClass}`}>
+                              {tagLabel}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {b.alternativeBlurbs && b.alternativeBlurbs.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleShuffleBlunder(idx)}
+                                title="Shuffle angle / varied wording"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 hover:text-amber-950 bg-amber-200/70 hover:bg-amber-200 px-1.5 py-0.5 rounded transition-colors print:hidden"
+                              >
+                                <RotateCcw className="w-2.5 h-2.5" />
+                                <span>Shuffle Angle</span>
+                              </button>
+                            )}
+                            {isFlipped && (
+                              <span className="text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                WOULD HAVE WON!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {b.headline && (
+                          <h5 className="font-sans font-black text-amber-950 text-[11px] uppercase tracking-wide mb-1">
+                            {b.headline}
+                          </h5>
+                        )}
+
+                        {isEditing ? (
+                          <textarea
+                            value={b.blurb}
+                            onChange={(e) => handleBlunderTextChange(idx, e.target.value)}
+                            rows={2}
+                            className="w-full p-2 text-xs text-amber-950 bg-white border border-amber-300 rounded font-serif italic mb-2 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                        ) : (
+                          <p className="font-serif italic text-amber-950 text-xs leading-relaxed bg-amber-100/60 p-2 rounded border-l-2 border-amber-600 mb-2">
+                            "{b.blurb}"
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                          <span>
+                            Benched: <strong className="text-emerald-800 font-semibold">{b.benchPlayerName}</strong> ({b.benchPlayerPoints} pts)
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span>
+                            Started: <strong className="text-rose-800 font-semibold">{b.starterPlayerName}</strong> ({b.starterPlayerPoints} pts)
+                          </span>
+                          <span className="text-slate-400">•</span>
+                          <span className="font-mono font-bold text-amber-800">
+                            +{b.pointsDifference} pt swing
+                          </span>
+                          {b.opponentName && (
+                            <>
+                              <span className="text-slate-400">•</span>
+                              <span className="text-slate-500 text-[10px]">
+                                vs {b.opponentName}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -892,11 +1074,18 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                   <p className="text-slate-700 mt-0.5">{localData.commissionerNotebook.galaxyBrain}</p>
                 </div>
 
-                <div>
-                  <h4 className="font-sans font-black uppercase text-rose-600 text-[11px]">
-                    BONEHEAD MOVE
+                <div className="bg-rose-50/70 -mx-2 p-2.5 rounded-sm border-l-2 border-rose-500">
+                  <h4 className="font-sans font-black uppercase text-rose-600 text-[11px] flex items-center justify-between">
+                    <span>BONEHEAD MOVE / BENCH REGRET</span>
+                    {localData.topPositionalBlunder && (
+                      <span className="text-[9px] bg-rose-600 text-white px-1.5 py-0.5 rounded font-sans font-bold">
+                        +{localData.topPositionalBlunder.pointsDifference} PTS LOST
+                      </span>
+                    )}
                   </h4>
-                  <p className="text-slate-700 mt-0.5">{localData.commissionerNotebook.bonehead}</p>
+                  <p className="text-slate-800 font-serif italic text-xs mt-1 leading-snug">
+                    {localData.commissionerNotebook.bonehead}
+                  </p>
                 </div>
 
                 <div>

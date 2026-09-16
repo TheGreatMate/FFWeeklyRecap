@@ -52,6 +52,8 @@ interface NotesGeneratorProps {
   choppedStats?: ChoppedWeekStats | null;
   selectedWeek: number;
   onSelectWeek?: (week: number) => void;
+  isDualWeek?: boolean;
+  onToggleDualWeek?: () => void;
 }
 
 export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
@@ -61,6 +63,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   choppedStats,
   selectedWeek,
   onSelectWeek,
+  isDualWeek = false,
+  onToggleDualWeek,
 }) => {
   const isChopped = format === 'chopped' || !!choppedStats;
 
@@ -347,6 +351,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
           duesNote,
           includePowerRankings,
           includeWaiverAdvice,
+          sidePotConfig,
           customApiKey: customApiKey || undefined,
         }),
       });
@@ -473,13 +478,13 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       {/* Top Header & View Modes */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Newspaper className="w-5 h-5 text-emerald-400" />
             <h3 className="text-xl font-bold text-white tracking-tight">
               {isChopped ? '🪓 The Guillotine Gazette & Report' : 'The Commissioner Gazette & Notes'}
             </h3>
             <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold">
-              3-Page Edition
+              Week {selectedWeek} Edition
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -488,48 +493,61 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
           </p>
         </div>
 
-        {/* View Switcher Tabs */}
-        <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 self-start lg:self-auto">
-          <button
-            type="button"
-            id="view-toggle-gazette"
-            onClick={() => setViewMode('gazette')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === 'gazette'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Newspaper className="w-3.5 h-3.5" />
-            <span>Gazette Newspaper</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+          {/* Week Selector in Notes Header */}
+          {onSelectWeek && (
+            <WeekSelector
+              currentWeek={selectedWeek}
+              onSelectWeek={onSelectWeek}
+              isDualWeek={isDualWeek}
+              onToggleDualWeek={onToggleDualWeek}
+              isChopped={isChopped}
+            />
+          )}
 
-          <button
-            type="button"
-            id="view-toggle-preview"
-            onClick={() => setViewMode('preview')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === 'preview'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Markdown View</span>
-          </button>
+          {/* View Switcher Tabs */}
+          <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button
+              type="button"
+              id="view-toggle-gazette"
+              onClick={() => setViewMode('gazette')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'gazette'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Newspaper className="w-3.5 h-3.5" />
+              <span>Gazette</span>
+            </button>
 
-          <button
-            type="button"
-            id="view-toggle-raw"
-            onClick={() => setViewMode('raw')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              viewMode === 'raw'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>Raw Chat Text</span>
-          </button>
+            <button
+              type="button"
+              id="view-toggle-preview"
+              onClick={() => setViewMode('preview')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'preview'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Markdown</span>
+            </button>
+
+            <button
+              type="button"
+              id="view-toggle-raw"
+              onClick={() => setViewMode('raw')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === 'raw'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span>Raw Text</span>
+            </button>
+          </div>
         </div>
       </div>
 

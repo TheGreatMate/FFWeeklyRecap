@@ -9,8 +9,53 @@ import {
   LeagueFormat,
   ChoppedWeekStats,
   CompactPlayer,
+  PositionalBenchBlunder,
 } from '../types';
 import { resolvePlayer, formatPlayerDisplayName } from './playerResolver';
+import { generateBlunderPhrasing } from './blunderPhrasing';
+
+/**
+ * Extracts the top-ranked players on a team.
+ * Prioritizes searchRank (Sleeper's player tier / draft rank), and falls back to
+ * highest fantasy points scored this week.
+ */
+export function getTopRankedPlayers(
+  players: CompactPlayer[],
+  count = 3
+): CompactPlayer[] {
+  if (!players || players.length === 0) return [];
+
+  const valid = players.filter((p) => {
+    if (!p || !p.name) return false;
+    const n = p.name.trim();
+    if (!n || n === 'Empty Slot') return false;
+    if (n.startsWith('Player #') || /^\d+$/.test(n)) return false;
+    return true;
+  });
+
+  const sorted = [...valid].sort((a, b) => {
+    const rankA = typeof a.searchRank === 'number' && a.searchRank > 0 ? a.searchRank : 99999;
+    const rankB = typeof b.searchRank === 'number' && b.searchRank > 0 ? b.searchRank : 99999;
+
+    // If either player has a meaningful Sleeper searchRank (< 5000), sort by rank ascending
+    if (rankA < 5000 || rankB < 5000) {
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+    }
+
+    // Secondary sort: points scored this week (descending)
+    const ptsA = typeof a.points === 'number' ? a.points : 0;
+    const ptsB = typeof b.points === 'number' ? b.points : 0;
+    if (ptsA !== ptsB) {
+      return ptsB - ptsA;
+    }
+
+    return rankA - rankB;
+  });
+
+  return sorted.slice(0, count);
+}
 
 /**
  * Automatically inspects the league and matchup data to detect if it's:
@@ -118,8 +163,27 @@ export function calculateWeekStats(
     }
 
     const rawStarters = m.starters || [];
-    const starterDetails = rawStarters.map((id) => resolvePlayer(id, playerMap));
+    const starterDetails = rawStarters.map((id, idx) => {
+      const p = resolvePlayer(id, playerMap);
+      const pts = m.starters_points ? m.starters_points[idx] : (m.players_points ? m.players_points[id] : 0);
+      return {
+        ...p,
+        points: typeof pts === 'number' ? pts : 0,
+      };
+    });
     const startersFormatted = starterDetails.map((p) => formatPlayerDisplayName(p));
+
+    const rawAllIds = (roster?.players && roster.players.length > 0) ? roster.players : rawStarters;
+    const allPlayerDetails = rawAllIds.map((id) => {
+      const p = resolvePlayer(id, playerMap);
+      const pts = m.players_points ? m.players_points[id] : 0;
+      return {
+        ...p,
+        points: typeof pts === 'number' ? pts : 0,
+      };
+    });
+
+    const topRankedPlayers = getTopRankedPlayers(allPlayerDetails, 3);
 
     const teamInfo: TeamInfo = {
       rosterId: m.roster_id,
@@ -136,6 +200,9 @@ export function calculateWeekStats(
       startersPoints: m.starters_points || [],
       benchPoints: Number(benchPoints.toFixed(2)),
       playersPoints: m.players_points || {},
+      allPlayerIds: rawAllIds,
+      allPlayerDetails,
+      topRankedPlayers,
     };
 
     teamMap.set(m.roster_id, teamInfo);
@@ -192,20 +259,25 @@ export function calculateWeekStats(
   const allTeams = Array.from(teamMap.values());
   const allScores = allTeams.map((t) => t.points).sort((a, b) => a - b);
 
-  // Highest & lowest scorers
+  // Average and median
+  const totalScore = allScores.reduce((sum, s) => sum + s, 0);
+  const hasStarted = totalScore > 0;
+  const averageScore = allScores.length > 0 ? Number((totalScore / allScores.length).toFixed(2)) : 0;
+
+  // Highest & lowest scorers (only if games have started)
   let highestScorer: TeamInfo | null = null;
   let lowestScorer: TeamInfo | null = null;
 
-  if (allTeams.length > 0) {
+  if (hasStarted && allTeams.length > 0) {
     highestScorer = [...allTeams].sort((a, b) => b.points - a.points)[0];
     lowestScorer = [...allTeams].sort((a, b) => a.points - b.points)[0];
   }
 
-  // Biggest Blowout (maximum margin)
+  // Biggest Blowout (maximum margin) (only if games have started)
   let biggestBlowout: HeadToHeadMatchup | null = null;
   let closestMatchup: HeadToHeadMatchup | null = null;
 
-  if (headToHeadList.length > 0) {
+  if (hasStarted && headToHeadList.length > 0) {
     const sortedByMargin = [...headToHeadList].sort((a, b) => b.margin - a.margin);
     biggestBlowout = sortedByMargin[0];
     closestMatchup = sortedByMargin[sortedByMargin.length - 1];
@@ -215,7 +287,7 @@ export function calculateWeekStats(
   let highestScoringLoser: { team: TeamInfo; matchup: HeadToHeadMatchup } | null = null;
   let lowestScoringWinner: { team: TeamInfo; matchup: HeadToHeadMatchup } | null = null;
 
-  if (headToHeadList.length > 0) {
+  if (hasStarted && headToHeadList.length > 0) {
     const allLosers = headToHeadList.map((m) => ({ team: m.loser, matchup: m }));
     allLosers.sort((a, b) => b.team.points - a.team.points);
     highestScoringLoser = allLosers[0] || null;
@@ -224,10 +296,6 @@ export function calculateWeekStats(
     allWinners.sort((a, b) => a.team.points - b.team.points);
     lowestScoringWinner = allWinners[0] || null;
   }
-
-  // Average and median
-  const totalScore = allScores.reduce((sum, s) => sum + s, 0);
-  const averageScore = allScores.length > 0 ? Number((totalScore / allScores.length).toFixed(2)) : 0;
 
   let medianScore = 0;
   if (allScores.length > 0) {
@@ -244,10 +312,139 @@ export function calculateWeekStats(
     .sort((a, b) => b.benchPoints - a.benchPoints)
     .slice(0, 3);
 
+  // Positional Bench Blunders ("If only [Manager] had started [BenchPlayer] instead of [Starter]..."):
+  const positionalBlunders: PositionalBenchBlunder[] = [];
+  const trackedPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+  if (hasStarted) {
+    interface RawBlunderCandidate {
+      team: TeamInfo;
+      pos: string;
+      bestBench: CompactPlayer;
+      lowestStarter: CompactPlayer;
+      diff: number;
+      margin: number;
+      opponentName: string;
+      wouldHaveWon: boolean;
+      didLose: boolean;
+    }
+
+    const rawCandidates: RawBlunderCandidate[] = [];
+
+    allTeams.forEach((team) => {
+      const starterIdSet = new Set(team.starterIds || []);
+      const benchPlayers = (team.allPlayerDetails || []).filter(
+        (p) => !starterIdSet.has(p.id) && typeof p.points === 'number'
+      );
+
+      const matchup = headToHeadList.find(
+        (m) => m.teamA.rosterId === team.rosterId || m.teamB.rosterId === team.rosterId
+      );
+      const didLose = matchup ? matchup.loser.rosterId === team.rosterId : false;
+      const margin = matchup ? matchup.margin : 0;
+      const opponent = matchup
+        ? matchup.teamA.rosterId === team.rosterId
+          ? matchup.teamB
+          : matchup.teamA
+        : undefined;
+      const opponentName = opponent?.ownerName || 'their opponent';
+
+      trackedPositions.forEach((pos) => {
+        const startersAtPos = (team.starterDetails || []).filter(
+          (s) => s.pos?.toUpperCase().trim() === pos && typeof s.points === 'number'
+        );
+        if (startersAtPos.length === 0) return;
+
+        const lowestStarter = startersAtPos.reduce(
+          (min, s) => (s.points < min.points ? s : min),
+          startersAtPos[0]
+        );
+
+        const benchAtPos = benchPlayers.filter(
+          (b) => b.pos?.toUpperCase().trim() === pos && typeof b.points === 'number'
+        );
+        if (benchAtPos.length === 0) return;
+
+        const bestBench = benchAtPos.reduce(
+          (max, b) => (b.points > max.points ? b : max),
+          benchAtPos[0]
+        );
+
+        // Check if bench player outscored the lowest starter at the same position
+        if (bestBench.points > lowestStarter.points) {
+          const diff = Number((bestBench.points - lowestStarter.points).toFixed(2));
+          if (diff >= 0.5) {
+            const wouldHaveWon = didLose && diff > margin;
+            rawCandidates.push({
+              team,
+              pos,
+              bestBench,
+              lowestStarter,
+              diff,
+              margin,
+              opponentName,
+              wouldHaveWon,
+              didLose,
+            });
+          }
+        }
+      });
+    });
+
+    // Sort blunders: match flippers first, then biggest point difference
+    rawCandidates.sort((a, b) => {
+      if (a.wouldHaveWon && !b.wouldHaveWon) return -1;
+      if (!a.wouldHaveWon && b.wouldHaveWon) return 1;
+      return b.diff - a.diff;
+    });
+
+    // Generate varied blurbs with rotating templates so no two blunders sound identical
+    rawCandidates.forEach((cand, idx) => {
+      const generated = generateBlunderPhrasing({
+        manager: cand.team.ownerName,
+        teamName: cand.team.teamName,
+        position: cand.pos,
+        benchPlayerName: cand.bestBench.name,
+        benchPlayerPoints: cand.bestBench.points,
+        starterPlayerName: cand.lowestStarter.name,
+        starterPlayerPoints: cand.lowestStarter.points,
+        pointsDifference: cand.diff,
+        matchupMargin: cand.margin,
+        opponentName: cand.opponentName,
+        wouldHaveWon: cand.wouldHaveWon,
+        didLose: cand.didLose,
+        index: idx,
+      });
+
+      positionalBlunders.push({
+        manager: cand.team.ownerName,
+        teamName: cand.team.teamName,
+        avatarUrl: cand.team.avatarUrl,
+        position: cand.pos,
+        benchPlayerName: cand.bestBench.name,
+        benchPlayerPoints: cand.bestBench.points,
+        starterPlayerName: cand.lowestStarter.name,
+        starterPlayerPoints: cand.lowestStarter.points,
+        pointsDifference: cand.diff,
+        matchupMargin: cand.margin,
+        opponentName: cand.opponentName,
+        wouldHaveWonMatchup: cand.wouldHaveWon,
+        blurb: generated.primaryBlurb,
+        headline: generated.headline,
+        flavorTag: generated.flavorTag,
+        alternativeBlurbs: generated.alternativeBlurbs,
+      });
+    });
+  }
+
+  const topPositionalBlunder = positionalBlunders[0] || null;
+
   return {
     week: weekNum,
     totalMatchups: headToHeadList.length,
     totalTeams: allTeams.length,
+    hasStarted,
+    totalScore,
     highestScorer,
     lowestScorer,
     biggestBlowout,
@@ -258,6 +455,8 @@ export function calculateWeekStats(
     medianScore,
     matchups: headToHeadList,
     benchBlunders,
+    positionalBlunders,
+    topPositionalBlunder,
   };
 }
 
@@ -318,6 +517,16 @@ export function generateTemplateNotes(
     }
   });
 
+  if (stats.positionalBlunders && stats.positionalBlunders.length > 0) {
+    out += `## 🤦‍♂️ Start/Sit Regrets ("If Only...")\n\n`;
+    stats.positionalBlunders.slice(0, 3).forEach((b) => {
+      const tagStr = b.flavorTag ? ` [${b.flavorTag}]` : '';
+      const headlineStr = b.headline ? ` *${b.headline}* — ` : ' ';
+      out += `- **${b.manager} (${b.teamName})**${tagStr}:${headlineStr}${b.blurb}\n`;
+    });
+    out += `\n`;
+  }
+
   out += `\n---\n*Generated by Fantasy Commissioner Notes with Sleeper API & AI*`;
   return out;
 }
@@ -359,8 +568,27 @@ export function calculateChoppedStats(
       : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(ownerName)}`;
 
     const rawStarters = m.starters || [];
-    const starterDetails = rawStarters.map((id) => resolvePlayer(id, playerMap));
+    const starterDetails = rawStarters.map((id, idx) => {
+      const p = resolvePlayer(id, playerMap);
+      const pts = m.starters_points ? m.starters_points[idx] : (m.players_points ? m.players_points[id] : 0);
+      return {
+        ...p,
+        points: typeof pts === 'number' ? pts : 0,
+      };
+    });
     const startersFormatted = starterDetails.map((p) => formatPlayerDisplayName(p));
+
+    const rawAllIds = (roster?.players && roster.players.length > 0) ? roster.players : rawStarters;
+    const allPlayerDetails = rawAllIds.map((id) => {
+      const p = resolvePlayer(id, playerMap);
+      const pts = m.players_points ? m.players_points[id] : 0;
+      return {
+        ...p,
+        points: typeof pts === 'number' ? pts : 0,
+      };
+    });
+
+    const topRankedPlayers = getTopRankedPlayers(allPlayerDetails, 3);
 
     return {
       rosterId: m.roster_id,
@@ -377,6 +605,9 @@ export function calculateChoppedStats(
       startersPoints: m.starters_points || [],
       benchPoints: 0,
       playersPoints: m.players_points || {},
+      allPlayerIds: rawAllIds,
+      allPlayerDetails,
+      topRankedPlayers,
     };
   });
 
@@ -413,6 +644,11 @@ export function calculateChoppedStats(
 
   const choppedRosterStarters = choppedTeam ? choppedTeam.starters : [];
   const choppedRosterDetails = choppedTeam ? choppedTeam.starterDetails : [];
+  const topRankedChoppedPlayers = choppedTeam
+    ? (choppedTeam.topRankedPlayers && choppedTeam.topRankedPlayers.length > 0
+        ? choppedTeam.topRankedPlayers
+        : getTopRankedPlayers(choppedRosterDetails || [], 3))
+    : [];
 
   return {
     week: weekNum,
@@ -427,6 +663,7 @@ export function calculateChoppedStats(
     medianScore,
     choppedRosterStarters,
     choppedRosterDetails,
+    topRankedChoppedPlayers,
   };
 }
 
@@ -454,9 +691,16 @@ export function generateChoppedTemplateNotes(
 
   out += `## 🪓 THE EXECUTION (CHOPPED TEAM)\n\n`;
   if (choppedTeam) {
+    const topStars =
+      stats.topRankedChoppedPlayers && stats.topRankedChoppedPlayers.length > 0
+        ? stats.topRankedChoppedPlayers.map((p) => p.name).join(', ')
+        : choppedTeam.topRankedPlayers && choppedTeam.topRankedPlayers.length > 0
+        ? choppedTeam.topRankedPlayers.map((p) => p.name).join(', ')
+        : 'their top roster starters';
+
     out += `Rest in peace to **${choppedTeam.teamName}** (${choppedTeam.ownerName}), who posted a league-low **${choppedTeam.points} pts** and has been officially **CHOPPED & ELIMINATED**.\n\n`;
     out += `> *"May your players find better managers on the waiver wire."*\n\n`;
-    out += `💰 **THE WAIVER GOLDRUSH:** All players on ${choppedTeam.teamName}'s roster will enter the waiver wire pool! Prepare your FAAB budgets for the impending feeding frenzy.\n\n`;
+    out += `💰 **THE WAIVER GOLDRUSH:** All players on ${choppedTeam.teamName}'s roster will enter the waiver wire pool! Top-ranked stars hitting waivers include: **${topStars}**! Prepare your FAAB budgets for the impending feeding frenzy.\n\n`;
   }
 
   out += `## 🏆 SURVIVOR SPOTLIGHTS\n\n`;

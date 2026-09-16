@@ -7,6 +7,9 @@ interface NavbarProps {
   isDemoActive: boolean;
   selectedWeek?: number;
   onSelectWeek?: (week: number) => void;
+  isDualWeek?: boolean;
+  onToggleDualWeek?: () => void;
+  isChopped?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -14,6 +17,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   isDemoActive,
   selectedWeek,
   onSelectWeek,
+  isDualWeek = false,
+  onToggleDualWeek,
+  isChopped = false,
 }) => {
   return (
     <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30">
@@ -47,6 +53,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <WeekSelector
                 currentWeek={selectedWeek}
                 onSelectWeek={onSelectWeek}
+                isDualWeek={isDualWeek}
+                onToggleDualWeek={onToggleDualWeek}
+                isChopped={isChopped}
               />
             </div>
           )}
