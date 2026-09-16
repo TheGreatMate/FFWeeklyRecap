@@ -2,6 +2,7 @@ import React from 'react';
 import { Trophy, Users, ChevronRight, Loader2, Calendar, Play, Skull, Swords } from 'lucide-react';
 import { SleeperLeague } from '../types';
 import { detectLeagueFormat } from '../utils/calc';
+import { WeekSelector } from './WeekSelector';
 
 interface LeagueSelectorProps {
   leagues: SleeperLeague[];
@@ -10,6 +11,8 @@ interface LeagueSelectorProps {
   isLoadingMatchups: boolean;
   onLoadDemo: () => void;
   onLoadChoppedDemo?: () => void;
+  selectedWeek?: number;
+  onSelectWeek?: (week: number) => void;
 }
 
 export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
@@ -19,7 +22,10 @@ export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
   isLoadingMatchups,
   onLoadDemo,
   onLoadChoppedDemo,
+  selectedWeek,
+  onSelectWeek,
 }) => {
+
   if (leagues.length === 0) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center shadow-lg">
@@ -71,18 +77,31 @@ export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
           </p>
         </div>
 
-        {onLoadChoppedDemo && (
-          <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {selectedWeek !== undefined && onSelectWeek && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
+                Week:
+              </span>
+              <WeekSelector
+                currentWeek={selectedWeek}
+                onSelectWeek={onSelectWeek}
+                disabled={isLoadingMatchups}
+              />
+            </div>
+          )}
+
+          {onLoadChoppedDemo && (
             <button
               type="button"
               onClick={onLoadChoppedDemo}
               className="text-xs px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 border border-rose-700/50 text-rose-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Skull className="w-3.5 h-3.5 text-rose-400" />
-              <span>Try Chopped Guillotine Demo</span>
+              <span>Try Chopped Demo</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3" id="leagues-button-container">

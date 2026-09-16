@@ -44,9 +44,12 @@ import {
   DEMO_USERS,
   DEMO_ROSTERS,
   DEMO_MATCHUPS_WEEK_1,
+  DEMO_MATCHUPS_WEEK_2,
   DEMO_CHOPPED_MATCHUPS_WEEK_1,
+  DEMO_CHOPPED_MATCHUPS_WEEK_2,
 } from './data/demoLeague';
 import { SLEEPER_PLAYERS_MAP } from './data/sleeperPlayers';
+import { WeekSelector } from './components/WeekSelector';
 
 export default function App() {
   const SEASON = '2026';
@@ -127,7 +130,8 @@ export default function App() {
       // Check if it's the demo chopped league
       if (leagueId === DEMO_CHOPPED_LEAGUE.league_id) {
         setLeagueFormat('chopped');
-        const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, week);
+        const demoMatchups = week === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
+        const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP);
         setChoppedStats(cStats);
         setWeekStats(null);
         setIsLoadingMatchups(false);
@@ -137,7 +141,8 @@ export default function App() {
       // Check if it's the demo standard league
       if (leagueId === DEMO_LEAGUE.league_id) {
         setLeagueFormat('head_to_head');
-        const hStats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, DEMO_MATCHUPS_WEEK_1, week);
+        const demoMatchups = week === 2 ? DEMO_MATCHUPS_WEEK_2 : DEMO_MATCHUPS_WEEK_1;
+        const hStats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP);
         setWeekStats(hStats);
         setChoppedStats(null);
         setIsLoadingMatchups(false);
@@ -214,11 +219,13 @@ export default function App() {
         );
 
         if (detectedFormat === 'chopped') {
-          const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, week, currentPlayers);
+          const fallbackMatchups = week === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
+          const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, fallbackMatchups, week, currentPlayers);
           setChoppedStats(cStats);
           setWeekStats(null);
         } else {
-          const calculated = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, DEMO_MATCHUPS_WEEK_1, week, currentPlayers);
+          const fallbackMatchups = week === 2 ? DEMO_MATCHUPS_WEEK_2 : DEMO_MATCHUPS_WEEK_1;
+          const calculated = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, fallbackMatchups, week, currentPlayers);
           setWeekStats(calculated);
           setChoppedStats(null);
         }
@@ -285,8 +292,22 @@ export default function App() {
     fetchLeagueMatchupData(league, selectedWeek);
   };
 
+  // User changes the active NFL week
+  const handleWeekChange = (newWeek: number) => {
+    setSelectedWeek(newWeek);
+    if (selectedLeague) {
+      fetchLeagueMatchupData(selectedLeague, newWeek);
+    } else if (isDemoActive) {
+      if (leagueFormat === 'chopped') {
+        handleLoadChoppedDemo(newWeek);
+      } else {
+        handleLoadDemo(newWeek);
+      }
+    }
+  };
+
   // Load Demo Standard H2H League
-  const handleLoadDemo = () => {
+  const handleLoadDemo = (weekToLoad: number = selectedWeek) => {
     setIsDemoActive(true);
     setUser(DEMO_USER);
     setUsername(DEMO_USER.username);
@@ -295,13 +316,14 @@ export default function App() {
     setLeagueFormat('head_to_head');
     setUserError(null);
     setMatchupError(null);
-    const stats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, DEMO_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
+    const matchups = weekToLoad === 2 ? DEMO_MATCHUPS_WEEK_2 : DEMO_MATCHUPS_WEEK_1;
+    const stats = calculateWeekStats(DEMO_ROSTERS, DEMO_USERS, matchups, weekToLoad, SLEEPER_PLAYERS_MAP);
     setWeekStats(stats);
     setChoppedStats(null);
   };
 
   // Load Demo Chopped / Guillotine League
-  const handleLoadChoppedDemo = () => {
+  const handleLoadChoppedDemo = (weekToLoad: number = selectedWeek) => {
     setIsDemoActive(true);
     setUser(DEMO_USER);
     setUsername(DEMO_USER.username);
@@ -310,14 +332,15 @@ export default function App() {
     setLeagueFormat('chopped');
     setUserError(null);
     setMatchupError(null);
-    const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
+    const matchups = weekToLoad === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
+    const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, matchups, weekToLoad, SLEEPER_PLAYERS_MAP);
     setChoppedStats(cStats);
     setWeekStats(null);
   };
 
   // Auto-load demo on initial load so the app greets the user with immediate visual proof and interactivity
   useEffect(() => {
-    handleLoadDemo();
+    handleLoadDemo(1);
   }, []);
 
   const isChoppedMode = leagueFormat === 'chopped';
@@ -326,8 +349,10 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
       {/* Top Navbar */}
       <Navbar
-        onLoadDemo={handleLoadDemo}
+        onLoadDemo={() => handleLoadDemo(selectedWeek)}
         isDemoActive={isDemoActive}
+        selectedWeek={selectedWeek}
+        onSelectWeek={handleWeekChange}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -340,7 +365,7 @@ export default function App() {
                 <strong>Sample League Mode:</strong> Try switching between{' '}
                 <button
                   type="button"
-                  onClick={handleLoadDemo}
+                  onClick={() => handleLoadDemo(selectedWeek)}
                   className={`font-bold underline cursor-pointer ${!isChoppedMode ? 'text-emerald-400' : 'text-slate-400 hover:text-white'}`}
                 >
                   Standard Head-to-Head
@@ -348,7 +373,7 @@ export default function App() {
                 and{' '}
                 <button
                   type="button"
-                  onClick={handleLoadChoppedDemo}
+                  onClick={() => handleLoadChoppedDemo(selectedWeek)}
                   className={`font-bold underline cursor-pointer ${isChoppedMode ? 'text-rose-400' : 'text-slate-400 hover:text-white'}`}
                 >
                   Chopped / Guillotine Format
@@ -395,8 +420,10 @@ export default function App() {
             selectedLeagueId={selectedLeague?.league_id || null}
             onSelectLeague={handleSelectLeague}
             isLoadingMatchups={isLoadingMatchups}
-            onLoadDemo={handleLoadDemo}
-            onLoadChoppedDemo={handleLoadChoppedDemo}
+            onLoadDemo={() => handleLoadDemo(selectedWeek)}
+            onLoadChoppedDemo={() => handleLoadChoppedDemo(selectedWeek)}
+            selectedWeek={selectedWeek}
+            onSelectWeek={handleWeekChange}
           />
         )}
 
@@ -467,47 +494,62 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Navigation Tabs - Dynamically adapted for Chopped vs H2H */}
-              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-                <button
-                  type="button"
-                  id="tab-notes-btn"
-                  onClick={() => setActiveTab('notes')}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'notes'
-                      ? isChoppedMode
-                        ? 'bg-rose-600 text-white shadow-sm'
-                        : 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  <Newspaper className="w-3.5 h-3.5" />
-                  <span>{isChoppedMode ? 'The Guillotine Gazette' : 'Weekly Gazette & Notes'}</span>
-                </button>
-                <button
-                  type="button"
-                  id="tab-matchups-btn"
-                  onClick={() => setActiveTab('breakdown')}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'breakdown'
-                      ? isChoppedMode
-                        ? 'bg-rose-600 text-white shadow-sm'
-                        : 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-900'
-                  }`}
-                >
-                  {isChoppedMode ? (
-                    <>
-                      <Skull className="w-3.5 h-3.5" />
-                      <span>Survivor Ladder & Waivers</span>
-                    </>
-                  ) : (
-                    <>
-                      <Swords className="w-3.5 h-3.5" />
-                      <span>Matchups & Scores</span>
-                    </>
-                  )}
-                </button>
+              {/* Controls: Week Selector + Navigation Tabs */}
+              <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider hidden md:inline">
+                    Week:
+                  </span>
+                  <WeekSelector
+                    currentWeek={selectedWeek}
+                    onSelectWeek={handleWeekChange}
+                    disabled={isLoadingMatchups}
+                    isChopped={isChoppedMode}
+                  />
+                </div>
+
+                {/* Navigation Tabs - Dynamically adapted for Chopped vs H2H */}
+                <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button
+                    type="button"
+                    id="tab-notes-btn"
+                    onClick={() => setActiveTab('notes')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'notes'
+                        ? isChoppedMode
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    <Newspaper className="w-3.5 h-3.5" />
+                    <span>{isChoppedMode ? 'The Guillotine Gazette' : 'Weekly Gazette & Notes'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    id="tab-matchups-btn"
+                    onClick={() => setActiveTab('breakdown')}
+                    className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'breakdown'
+                        ? isChoppedMode
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                    }`}
+                  >
+                    {isChoppedMode ? (
+                      <>
+                        <Skull className="w-3.5 h-3.5" />
+                        <span>Survivor Ladder & Waivers</span>
+                      </>
+                    ) : (
+                      <>
+                        <Swords className="w-3.5 h-3.5" />
+                        <span>Matchups & Scores</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -526,6 +568,7 @@ export default function App() {
                 stats={weekStats}
                 choppedStats={choppedStats}
                 selectedWeek={selectedWeek}
+                onSelectWeek={handleWeekChange}
               />
             )}
 

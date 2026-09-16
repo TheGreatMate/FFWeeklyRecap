@@ -4,6 +4,7 @@ import {
   LeagueFormat,
   SidePotConfig,
   GazetteReportData,
+  NoteTone,
 } from '../types';
 
 export const DEFAULT_SIDE_POT_CONFIG: SidePotConfig = {
@@ -18,7 +19,7 @@ export const DEFAULT_SIDE_POT_CONFIG: SidePotConfig = {
 
 /**
  * Builds all data and commentary for the 3-page Weekly Gazette Newspaper Report
- * mimicking the exact structure from the commissioner newsletter.
+ * dynamically adapting to the selected Commissioner Tone.
  */
 export function buildGazetteReportData(
   leagueName: string,
@@ -27,7 +28,8 @@ export function buildGazetteReportData(
   format: LeagueFormat = 'head_to_head',
   sidePotConfig: SidePotConfig = DEFAULT_SIDE_POT_CONFIG,
   customMotto: string = 'SAME LEAGUE. DIFFERENT LEVELS.',
-  customEditionTag?: string
+  customEditionTag?: string,
+  tone: NoteTone = 'roast'
 ): GazetteReportData {
   const isChopped = format === 'chopped' || !!choppedStats;
   const week = weekStats?.week || choppedStats?.week || 1;
@@ -47,19 +49,36 @@ export function buildGazetteReportData(
     const chopped = c.choppedTeam;
     const narrow = c.narrowEscape;
 
-    const leadHeadline = apex
-      ? `${apex.ownerName.toUpperCase()} SURVIVES AT THE APEX AS THE BLADE FALLS`
-      : 'THE GUILLOTINE CLAIMS ITS FIRST SACRIFICE';
-
     const rawStarters = c.choppedRosterDetails?.map((p) => p.name) || c.choppedRosterStarters || [];
     const cleanStarters = rawStarters
       .map((s) => s.replace(/\s*\([^)]*\)/, '').trim())
       .filter((s) => s && !s.startsWith('Player #') && !/^\d+$/.test(s));
     const starsPhrase = cleanStarters.length > 0 ? cleanStarters.slice(0, 3).join(', ') : 'their top starters';
 
-    const leadStory = chopped
+    let leadHeadline = apex
+      ? `${apex.ownerName.toUpperCase()} SURVIVES AT THE APEX AS THE BLADE FALLS`
+      : 'THE GUILLOTINE CLAIMS ITS FIRST SACRIFICE';
+
+    let leadStory = chopped
       ? `${chopped.points} points. Week ${week} has claimed its victim. ${chopped.ownerName} (${chopped.teamName}) fell short of the cut line and has been officially chopped from the league. Their entire roster—including stars ${starsPhrase}—is immediately surrendered to the waiver wire.`
       : `The executioner had no mercy in Week ${week}. Survival is the only metric that matters.`;
+
+    if (tone === 'hunger_games') {
+      leadHeadline = `CANNON FIRE IN WEEK ${week}: ${chopped?.ownerName.toUpperCase() || 'TRIBUTE'} FALLS IN THE ARENA!`;
+      leadStory = `Tributes of ${leagueName}, welcome to the Capitol broadcast! A solitary cannon blast thundered across the arena in Week ${week}. With only ${chopped?.points} points, ${chopped?.ownerName} (${chopped?.teamName}) has fallen beneath the cut line and is eliminated forever. The Capitol hovercraft has retrieved their remains, and their supplies (${starsPhrase}) are dumped into the Cornucopia waiver wire! May the fantasy odds be ever in your favor!`;
+    } else if (tone === 'grim_reaper') {
+      leadHeadline = `THE EXECUTIONER STRIKES: ${chopped?.ownerName.toUpperCase() || 'VICTIM'} BEHEADED IN WEEK ${week}`;
+      leadStory = `A solemn shadow blankets ${leagueName}. In Week ${week}, the guillotine fell without pity. ${chopped?.ownerName} (${chopped?.teamName}) managed only ${chopped?.points} points—a fatal death sentence. As the body is carted to the morgue, eleven vultures circle: star players ${starsPhrase} are now surrendered to the waiver wire for the living to scavenge.`;
+    } else if (tone === 'roast') {
+      leadHeadline = `${chopped?.ownerName.toUpperCase()} CHOKES UNDER PRESSURE AND GETS SLICED BY THE GUILLOTINE`;
+      leadStory = `Pack your bags, delete your league app, and hand over your phone. ${chopped?.points} points? That's not a fantasy score, that's an embarrassing cry for help. ${chopped?.ownerName} (${chopped?.teamName}) put up the league's worst performance and got tossed into the paper shredder. Meanwhile, the rest of us are gleefully scavenging ${starsPhrase} off your corpse.`;
+    } else if (tone === 'hype') {
+      leadHeadline = `⚡ BLOOD ON THE SAND! ${chopped?.ownerName.toUpperCase()} ELIMINATED AS ${apex?.ownerName.toUpperCase() || 'APEX'} REIGNS!`;
+      leadStory = `ABSOLUTE MAYHEM ON THE CHOPPING BLOCK! In a high-stakes survival showdown, ${chopped?.ownerName} couldn't withstand the pressure, finishing with ${chopped?.points} points! The arena erupts as ${apex?.ownerName} dominates with ${apex?.points} points! Every single star player (${starsPhrase}) hits the waiver wire in an all-out FAAB WAR!`;
+    } else if (tone === 'conspiracy') {
+      leadHeadline = `🚨 WAS THE CHOP RIGGED? SUSPICIOUS ANOMALIES SEAL ${chopped?.ownerName.toUpperCase()}'S FATE`;
+      leadStory = `Statistical audit alert. In Week ${week}, ${chopped?.ownerName}'s squad mysteriously underperformed their median projections by 42%. Was this poor management, or did the Sleeper RNG gods intervene to purge ${chopped?.teamName}? Either way, ${starsPhrase} are now on waivers, and our forensic investigation into the algorithm continues.`;
+    }
 
     const gmOfTheWeek = {
       manager: apex?.ownerName || 'Apex Survivor',
@@ -205,15 +224,40 @@ export function buildGazetteReportData(
       },
       powerRankings,
       commissionerNotebook: {
-        fraudWatch: `${chopped?.ownerName || 'The Eliminated'}. Expected to contend, but crashed out in the very first test.`,
-        stockUp: `${apex?.ownerName || 'Leader'} and the top tier. Put up dominant numbers.`,
-        stockDown: `${narrow?.team.ownerName || 'The Bubble'}. Survived on borrowed time.`,
+        fraudWatch:
+          tone === 'hunger_games'
+            ? `${chopped?.ownerName || 'The Tribute'}. Pre-game favorites who perished in the very first minutes of the bloodbath.`
+            : tone === 'grim_reaper'
+            ? `${chopped?.ownerName || 'The Deceased'}. Drafted like a titan, buried in the cellar. No mourners, no funerals.`
+            : tone === 'roast'
+            ? `${chopped?.ownerName || 'The Choker'}. All that pre-season trash talk just to get beheaded in Week ${week}. Embarrassing.`
+            : `${chopped?.ownerName || 'The Eliminated'}. Expected to contend, but crashed out in the very first test.`,
+        stockUp:
+          tone === 'hunger_games'
+            ? `${apex?.ownerName || 'Apex Predator'}. The Capitol sponsors are raining down parachute care packages.`
+            : tone === 'grim_reaper'
+            ? `${apex?.ownerName || 'The Immortal'}. Sitting untouchable on high while others rot beneath the soil.`
+            : `${apex?.ownerName || 'Leader'} and the top tier. Put up dominant numbers.`,
+        stockDown:
+          tone === 'hunger_games'
+            ? `${narrow?.team.ownerName || 'The Bubble'}. Barely outran the tracker jackers. One scratch away from elimination.`
+            : tone === 'grim_reaper'
+            ? `${narrow?.team.ownerName || 'The Near-Dead'}. We had the toe-tag already written out before a garbage-time miracle.`
+            : `${narrow?.team.ownerName || 'The Bubble'}. Survived on borrowed time.`,
         galaxyBrain: `Saving FAAB budget while still squeaking through to the next round.`,
         bonehead: `${chopped?.ownerName || 'Eliminated'}'s lineup choices. Cost them the entire season.`,
-        leagueCanon: `The blade has tasted blood. ${chopped?.ownerName}'s stars are the prize of the waiver wire.`,
+        leagueCanon:
+          tone === 'hunger_games'
+            ? `The cannon fired. The Capitol will never forget the sacrifice of ${chopped?.ownerName}.`
+            : `The blade has tasted blood. ${chopped?.ownerName}'s stars are the prize of the waiver wire.`,
         aroundTheLeague: `Survival threshold was ${narrow?.team.points || 80} points. Next week the floor rises.`,
         nextWeekWarning: `FAAB bids process Wednesday at 8 PM. Check your waiver claims.`,
-        finalWord: `Week ${week} is history. One manager is in the grave, and eleven vultures are ready to feast on their roster.`,
+        finalWord:
+          tone === 'hunger_games'
+            ? `One tribute down, eleven remain. Happy Hunger Games, and may the fantasy odds be ever in your favor!`
+            : tone === 'grim_reaper'
+            ? `The earth has swallowed ${chopped?.teamName}. The living must now feast on what remains. Rest in peace.`
+            : `Week ${week} is history. One manager is in the grave, and eleven vultures are ready to feast on their roster.`,
       },
     };
   }
@@ -255,8 +299,25 @@ export function buildGazetteReportData(
     : `${boneheadManager}'s ${lowScorer?.points || 99.1} points. No further questions at this time.`;
 
   // Lead Headline and Story
-  const leadHeadline = `${gmName.toUpperCase()} OPENS THE SEASON WITH A STATEMENT`;
-  const leadStory = `${gmPoints} points. The Week ${week} scoring crown belongs to ${gmName}, who knocked off their opponent in the highest-scoring contest of the week. Second-place would have beaten nearly everyone else in the league, but they happened to draw the one roster that scored more.`;
+  let leadHeadline = `${gmName.toUpperCase()} OPENS THE SEASON WITH A STATEMENT`;
+  let leadStory = `${gmPoints} points. The Week ${week} scoring crown belongs to ${gmName}, who knocked off their opponent in the highest-scoring contest of the week. Second-place would have beaten nearly everyone else in the league, but they happened to draw the one roster that scored more.`;
+
+  if (tone === 'roast') {
+    leadHeadline = `${gmName.toUpperCase()} RUNS WILD WHILE THE CELLAR CRUMBLES`;
+    leadStory = `${gmPoints} points! The Week ${week} scoring crown belongs to ${gmName}, who treated their opponent like an unlicensed demolition derby. Meanwhile, down at the bottom of the scoreboard, we have managers who apparently thought the draft was optional. If your team failed to crack triple digits, please seek immediate spiritual guidance.`;
+  } else if (tone === 'espn') {
+    leadHeadline = `WEEK ${week} INSIDER: ${gmName.toUpperCase()} TAKES SCORING CROWN IN TACTICAL MASTERCLASS`;
+    leadStory = `With ${gmPoints} points on the ledger, ${gmName} put together the definitive performance of Week ${week}. Utilizing high-leverage target shares and red-zone efficiency, the roster dominated from the 1:00 PM window through Monday night. In our featured clash, second-place posted numbers that would have defeated 80% of the league, yet ran into a freight train.`;
+  } else if (tone === 'commish') {
+    leadHeadline = `OFFICIAL COMMISH ADDRESS: ${gmName.toUpperCase()} LEADS THE LEAGUE IN WEEK ${week}`;
+    leadStory = `Gentlemen and managers of ${leagueName}, welcome to the official Week ${week} review. I want to commend ${gmName} (${gmTeam}) for setting the championship benchmark with ${gmPoints} points. Fantasy football is a marathon, not a sprint. To those holding an 0-1 record: keep your composure, manage the waiver wire diligently, and maintain competitive integrity.`;
+  } else if (tone === 'hype') {
+    leadHeadline = `⚡ HIGH-VOLTAGE CARNAGE! ${gmName.toUpperCase()} ANNIHILATES WEEK ${week}!`;
+    leadStory = `ABSOLUTE MAYHEM IN THE STADIUM! ${gmPoints} EXPLOSIVE POINTS! ${gmName} went full scorched-earth mode, dropping 50-yard bombs and red-zone touchdowns until the scoreboard nearly short-circuited! The fans are going wild, the fireworks are exploding, and the championship race is on FIRE!`;
+  } else if (tone === 'conspiracy') {
+    leadHeadline = `🚨 WAS WEEK ${week} RIGGED? THE INVESTIGATION INTO ${gmName.toUpperCase()}'S WIN`;
+    leadStory = `Look at the numbers. Just open your eyes and look at the timestamps. ${gmPoints} points? Convenient garbage-time touchdowns in the final 2 minutes? We ran statistical simulations through our encrypted terminal, and the probability of ${gmName}'s outcome is 0.0041%. Did the Sleeper scheduling algorithm collude with the schedule-makers? We are not pointing fingers, but the paper trail is undeniably suspicious.`;
+  }
 
   // Unlucky Bastard Club
   const unluckyBastard = unlucky
@@ -436,15 +497,46 @@ export function buildGazetteReportData(
     },
     powerRankings,
     commissionerNotebook: {
-      fraudWatch: `${boneheadManager}. Low scoring from a roster that looked terrifying on paper. There is plenty of season left, but Week ${week} did not inspire confidence.`,
-      stockUp: `${uniqueTeams.slice(0, 4).map((t) => `${t.ownerName}: ${t.points}`).join('. ')}. The early contenders have announced themselves.`,
-      stockDown: `${uniqueTeams.slice(-2).map((t) => t.ownerName).join(' and ')}. Both finished below expectations and need their star players to start acting like stars.`,
+      fraudWatch:
+        tone === 'roast'
+          ? `${boneheadManager}. Talked endlessly on draft night, only to drop an absolute stinker. Bench yourself.`
+          : tone === 'espn'
+          ? `${boneheadManager}. High draft equity yet low opportunity share. Usage metrics demand immediate attention.`
+          : tone === 'hype'
+          ? `${boneheadManager}! ALL TALK NO FIREWORKS! Time to wake up and start balling!`
+          : tone === 'conspiracy'
+          ? `${boneheadManager}. Clearly a targeted victim of the Sleeper RNG simulation.`
+          : `${boneheadManager}. Low scoring from a roster that looked terrifying on paper. There is plenty of season left, but Week ${week} did not inspire confidence.`,
+      stockUp:
+        tone === 'roast'
+          ? `${uniqueTeams.slice(0, 3).map((t) => t.ownerName).join(', ')}. Enjoying life at the top while laughing at the cellar dwellers.`
+          : tone === 'hype'
+          ? `${uniqueTeams.slice(0, 3).map((t) => t.ownerName).join(', ')}. PURE POWER! UNSTOPPABLE APEX BEASTS!`
+          : `${uniqueTeams.slice(0, 4).map((t) => `${t.ownerName}: ${t.points}`).join('. ')}. The early contenders have announced themselves.`,
+      stockDown:
+        tone === 'roast'
+          ? `${uniqueTeams.slice(-2).map((t) => t.ownerName).join(' and ')}. Look like they drafted off a fantasy magazine from 2018.`
+          : tone === 'conspiracy'
+          ? `${uniqueTeams.slice(-2).map((t) => t.ownerName).join(' and ')}. The schedule generator gave them the statistical death draw.`
+          : `${uniqueTeams.slice(-2).map((t) => t.ownerName).join(' and ')}. Both finished below expectations and need their star players to start acting like stars.`,
       galaxyBrain: `${galaxyManager} starting both high-upside passers in Superflex was exactly what the format demands.`,
       bonehead: `${boneheadManager}'s low scoring total. No further questions at this time.`,
       leagueCanon: `${gmName} is the early target on everyone's calendar. ${unlucky ? `${unlucky.team.ownerName} is the unlucky bastard.` : ''} The title race is officially underway.`,
       aroundTheLeague: `Week ${week} produced multiple high-scoring performances above average. The top of the standings is already crowded.`,
-      nextWeekWarning: `The side pot is back. $${sidePotConfig.entryFee} entry fee per player, due before Thursday Night Football kickoff. Pay your damn five dollars.`,
-      finalWord: `Week ${week} is officially in the books. ${gmName} owns the scoreboard. ${pointsWinner} claims the points side pot. And everyone else has approximately one week of evidence for whatever argument they plan to make about their roster.`,
+      nextWeekWarning:
+        tone === 'roast'
+          ? `Pay your damn $${sidePotConfig.entryFee} side pot before Thursday kickoff or get roasted in the public square.`
+          : tone === 'hype'
+          ? `GET YOUR $${sidePotConfig.entryFee} SIDE-POT LOCKED IN BEFORE TNF! NO EXCUSES!`
+          : `The side pot is back. $${sidePotConfig.entryFee} entry fee per player, due before Thursday Night Football kickoff. Pay your damn five dollars.`,
+      finalWord:
+        tone === 'roast'
+          ? `Week ${week} is over. ${gmName} gets the glory, the losers get the mockery, and the rest of you have six days to fix your disastrous teams.`
+          : tone === 'espn'
+          ? `Week ${week} establishes an aggressive baseline. Watch the waiver wires closely as early trends convert into playoff momentum.`
+          : tone === 'hype'
+          ? `WEEK ${week} BROUGHT THE HOUSE DOWN! GET READY FOR MORE MAYHEM IN WEEK ${week + 1}!`
+          : `Week ${week} is officially in the books. ${gmName} owns the scoreboard. ${pointsWinner} claims the points side pot. And everyone else has approximately one week of evidence for whatever argument they plan to make about their roster.`,
     },
   };
 }

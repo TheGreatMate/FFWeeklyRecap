@@ -34,7 +34,9 @@ import {
   gazetteToMarkdown,
   DEFAULT_SIDE_POT_CONFIG,
 } from '../utils/gazetteCalc';
+import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
 import { WeeklyGazetteReport } from './WeeklyGazetteReport';
+import { WeekSelector } from './WeekSelector';
 
 interface NotesGeneratorProps {
   leagueName: string;
@@ -42,6 +44,7 @@ interface NotesGeneratorProps {
   stats?: WeekStats | null;
   choppedStats?: ChoppedWeekStats | null;
   selectedWeek: number;
+  onSelectWeek?: (week: number) => void;
 }
 
 export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
@@ -50,6 +53,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   stats,
   choppedStats,
   selectedWeek,
+  onSelectWeek,
 }) => {
   const isChopped = format === 'chopped' || !!choppedStats;
 
@@ -87,9 +91,10 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       format,
       sidePotConfig,
       motto,
-      editionTag
+      editionTag,
+      tone
     );
-  }, [leagueName, stats, choppedStats, format, sidePotConfig, motto, editionTag]);
+  }, [leagueName, stats, choppedStats, format, sidePotConfig, motto, editionTag, tone]);
 
   const [gazetteData, setGazetteData] = useState<GazetteReportData>(initialGazetteData);
   const [generatedNotes, setGeneratedNotes] = useState<string>(() =>
@@ -101,8 +106,9 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   const [generationSource, setGenerationSource] = useState<'ai' | 'builtin' | null>('builtin');
   const [copied, setCopied] = useState(false);
 
-  // Keep gazette data synchronized when league, stats, or side-pot changes
-  useEffect(() => {
+  // Switch tone and immediately regenerate both Gazette and notes
+  const handleToneSelect = (newTone: NoteTone) => {
+    setTone(newTone);
     const updated = buildGazetteReportData(
       leagueName,
       stats,
@@ -110,18 +116,35 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       format,
       sidePotConfig,
       motto,
-      editionTag
+      editionTag,
+      newTone
     );
     setGazetteData(updated);
     setGeneratedNotes(gazetteToMarkdown(updated));
+    setGenerationSource('builtin');
+  };
+
+  // Keep gazette data synchronized when league, stats, week, or side-pot changes
+  useEffect(() => {
     if (isChopped) {
-      setTone('grim_reaper');
       setEditionTag('SURVIVAL ELIMINATION');
     } else {
-      setTone('roast');
       setEditionTag('INAUGURAL DYNASTY SEASON');
     }
-  }, [leagueName, isChopped, stats, choppedStats, sidePotConfig, motto, editionTag, format]);
+    const updated = buildGazetteReportData(
+      leagueName,
+      stats,
+      choppedStats,
+      format,
+      sidePotConfig,
+      motto,
+      isChopped ? 'SURVIVAL ELIMINATION' : 'INAUGURAL DYNASTY SEASON',
+      tone
+    );
+    setGazetteData(updated);
+    setGeneratedNotes(gazetteToMarkdown(updated));
+  }, [leagueName, isChopped, stats, choppedStats, sidePotConfig, motto, format, tone, selectedWeek]);
+
 
   // Handle entry fee / entries count change in side pot
   const updateSidePot = (field: keyof SidePotConfig, value: any) => {
@@ -252,13 +275,13 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
     } catch (err: any) {
       console.warn('Note generation notice:', err.message);
       setGenerationSource('builtin');
-      handleGenerateTemplate();
+      handleGenerateTemplate(tone);
     } finally {
       setIsGeneratingAI(false);
     }
   };
 
-  const handleGenerateTemplate = () => {
+  const handleGenerateTemplate = (toneToUse: NoteTone = tone) => {
     setAiError(null);
     setGenerationSource('builtin');
     const updated = buildGazetteReportData(
@@ -268,7 +291,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       format,
       sidePotConfig,
       motto,
-      editionTag
+      editionTag,
+      toneToUse
     );
     setGazetteData(updated);
     setGeneratedNotes(gazetteToMarkdown(updated));
@@ -276,11 +300,41 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(generatedNotes);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(generatedNotes);
+      } else {
+        // Fallback for non-HTTPS environments like local Unraid container IPs
+        const textarea = document.createElement('textarea');
+        textarea.value = generatedNotes;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
-      console.error('Clipboard copy failed:', e);
+      console.error('Standard clipboard copy failed, attempting fallback:', e);
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = generatedNotes;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (errFallback) {
+        console.error('All clipboard methods failed:', errFallback);
+      }
     }
   };
 
@@ -376,7 +430,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => setTone(t.id)}
+                    id={`tone-select-btn-${t.id}`}
+                    onClick={() => handleToneSelect(t.id)}
                     className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all flex items-start gap-2.5 cursor-pointer ${
                       isSelected
                         ? isChopped
@@ -546,7 +601,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
             <button
               type="button"
               id="generate-template-notes-btn"
-              onClick={handleGenerateTemplate}
+              onClick={() => handleGenerateTemplate(tone)}
               className="w-full py-2.5 px-3 bg-slate-950 hover:bg-slate-800/80 border border-slate-700 text-slate-300 font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
             >
               <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
@@ -578,31 +633,62 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
         {/* Right Column: Output Preview and Gazette */}
         <div className="lg:col-span-8 flex flex-col space-y-3">
           {/* Action Bar: Copy, Download, Print */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              {viewMode === 'gazette' ? (
-                <>
-                  <Newspaper className="w-4 h-4 text-emerald-400" />
-                  <span>The Weekly Gazette (3 Pages)</span>
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4 text-slate-400" />
-                  <span>{viewMode === 'preview' ? 'Markdown Document' : 'Raw Text for Sleeper'}</span>
-                </>
-              )}
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                {viewMode === 'gazette' ? (
+                  <>
+                    <Newspaper className="w-4 h-4 text-emerald-400" />
+                    <span>The Weekly Gazette</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4 text-slate-400" />
+                    <span>{viewMode === 'preview' ? 'Markdown Document' : 'Raw Text for Sleeper'}</span>
+                  </>
+                )}
+              </span>
 
-            <div className="flex items-center gap-2">
+              {onSelectWeek && (
+                <WeekSelector
+                  currentWeek={selectedWeek}
+                  onSelectWeek={onSelectWeek}
+                  isChopped={isChopped}
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
               {viewMode === 'gazette' && (
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print / PDF</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    id="action-bar-download-html-btn"
+                    onClick={() =>
+                      downloadGazetteHTML(
+                        document.getElementById('gazette-document'),
+                        gazetteData.leagueName,
+                        gazetteData.week
+                      )
+                    }
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                    title="Download Standalone HTML for Printing or PDF Export"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-300" />
+                    <span>Save HTML</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="action-bar-print-gazette-btn"
+                    onClick={() => printGazetteElement('gazette-document')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+                    title="Print or Save as PDF"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print / PDF</span>
+                  </button>
+                </>
               )}
 
               <button

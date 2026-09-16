@@ -1,1 +1,69 @@
 @import "tailwindcss";
+
+@media print {
+  /* Hide non-printable app components */
+  nav,
+  header,
+  aside,
+  button,
+  input,
+  textarea,
+  select,
+  .print\:hidden,
+  #view-toggle-gazette,
+  #view-toggle-preview,
+  #view-toggle-raw,
+  #generate-ai-notes-btn,
+  #generate-template-notes-btn,
+  #copy-notes-btn,
+  #download-notes-btn {
+    display: none !important;
+  }
+
+  /* Reset body and html container for pure page flow */
+  html,
+  body,
+  #root,
+  main,
+  div[class*="min-h-screen"],
+  div[class*="overflow-y-auto"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Force white background and dark text on Gazette */
+  #gazette-document {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  /* Page breaks between pages 1, 2, and 3 */
+  section {
+    page-break-inside: avoid;
+  }
+
+  .print\:break-after-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  @page {
+    size: letter portrait;
+    margin: 0.35in;
+  }
+}

@@ -344,3 +344,205 @@ export const DEMO_CHOPPED_MATCHUPS_WEEK_1: SleeperMatchupItem[] = [
     players_points: { 'Nick Chubb': 0 },
   },
 ];
+
+export const DEMO_MATCHUPS_WEEK_2: SleeperMatchupItem[] = [
+  // Matchup 1: Heavyweight Clash (161.80 vs 121.20 -> 40.60 pt margin)
+  {
+    matchup_id: 1,
+    roster_id: 3,
+    points: 161.80,
+    starters: ['Josh Allen', 'Bijan Robinson', 'Jahmyr Gibbs', 'CeeDee Lamb', 'Amon-Ra St. Brown', 'Sam LaPorta', 'Davante Adams', 'Evan McPherson', '49ers DEF'],
+    starters_points: [31.4, 21.2, 18.5, 29.8, 22.1, 14.8, 11.0, 7.0, 6.0],
+    players_points: { 'Christian Watson': 12.4 },
+  },
+  {
+    matchup_id: 1,
+    roster_id: 1,
+    points: 121.20,
+    starters: ['Patrick Mahomes', 'Christian McCaffrey', 'Kyren Williams', 'Justin Jefferson', 'Tyreek Hill', 'Travis Kelce', 'Breece Hall', 'Harrison Butker', 'Ravens DEF'],
+    starters_points: [19.2, 18.5, 14.2, 21.0, 16.4, 11.0, 12.9, 5.0, 3.0],
+    players_points: { 'Khalil Shakir': 13.5 },
+  },
+
+  // Matchup 2: High scoring shootout & Highest-Scoring Loser (146.50 vs 141.20 -> 5.30 pt thriller!)
+  {
+    matchup_id: 2,
+    roster_id: 4,
+    points: 146.50,
+    starters: ['Lamar Jackson', 'Saquon Barkley', 'Isiah Pacheco', 'A.J. Brown', 'Garrett Wilson', 'Mark Andrews', 'Jaylen Waddle', 'Justin Tucker', 'Jets DEF'],
+    starters_points: [25.4, 31.2, 14.8, 20.1, 18.2, 12.4, 11.4, 8.0, 5.0],
+    players_points: { 'Jameson Williams': 14.2 },
+  },
+  {
+    matchup_id: 2,
+    roster_id: 9,
+    points: 141.20, // Second highest score of the week, but lost in a heartbreaker!
+    starters: ['Jalen Hurts', 'Jonathan Taylor', 'Derrick Henry', 'Puka Nacua', 'Marvin Harrison Jr', 'Dalton Kincaid', 'Nico Collins', 'Brandon Aubrey', 'Chiefs DEF'],
+    starters_points: [24.1, 22.8, 19.4, 18.5, 21.2, 11.2, 12.0, 6.0, 6.0],
+    players_points: { 'Jayden Daniels': 15.0 },
+  },
+
+  // Matchup 3: Sarah Connor bounce-back win (128.40 vs 106.80)
+  {
+    matchup_id: 3,
+    roster_id: 2,
+    points: 128.40,
+    starters: ['Anthony Richardson', 'Brian Thomas Jr', 'Jerome Ford', 'Diontae Johnson', 'Hollywood Brown', 'Dalton Schultz', 'Rome Odunze', 'Greg Zuerlein', 'Patriots DEF'],
+    starters_points: [22.4, 24.1, 15.2, 18.4, 14.2, 9.1, 13.0, 7.0, 5.0],
+    players_points: { 'Devin Singletary': 8.2 },
+  },
+  {
+    matchup_id: 3,
+    roster_id: 7,
+    points: 106.80,
+    starters: ['Brock Purdy', 'Josh Jacobs', 'Joe Mixon', 'DeVonta Smith', 'DK Metcalf', 'David Njoku', 'Zay Flowers', 'Younghoe Koo', 'Steelers DEF'],
+    starters_points: [16.8, 14.5, 12.2, 18.4, 15.1, 8.4, 9.4, 6.0, 6.0],
+    players_points: {},
+  },
+
+  // Matchup 4: Nail-biter! Decided by 1.50 points (118.90 vs 117.40)
+  {
+    matchup_id: 4,
+    roster_id: 6,
+    points: 118.90,
+    starters: ['Dak Prescott', 'Travis Etienne', 'Rachaad White', 'Chris Olave', 'Michael Pittman', 'Kyle Pitts', 'Tee Higgins', 'Jake Elliott', 'Cowboys DEF'],
+    starters_points: [19.2, 18.4, 11.2, 17.5, 16.1, 10.5, 12.0, 7.0, 7.0],
+    players_points: { 'Zack Moss': 11.2 },
+  },
+  {
+    matchup_id: 4,
+    roster_id: 5,
+    points: 117.40,
+    starters: ['C.J. Stroud', 'James Cook', 'Kenneth Walker', 'Mike Evans', 'Deebo Samuel', 'George Kittle', 'DJ Moore', 'Cameron Dicker', 'Bills DEF'],
+    starters_points: [18.2, 15.4, 16.2, 19.1, 15.0, 11.5, 11.0, 6.0, 5.0],
+    players_points: {},
+  },
+
+  // Matchup 5: Biggest Blowout of Week 2! (132.60 vs 84.10 -> 48.50 pt margin!)
+  {
+    matchup_id: 5,
+    roster_id: 8,
+    points: 132.60,
+    starters: ['Jordan Love', 'Alvin Kamara', 'David Montgomery', 'Cooper Kupp', 'Christian Kirk', 'Evan Engram', 'Terry McLaurin', 'Matt Gay', 'Eagles DEF'],
+    starters_points: [24.5, 26.2, 14.8, 22.1, 12.5, 10.5, 11.0, 5.0, 6.0],
+    players_points: { 'Jakobi Meyers': 8.0 },
+  },
+  {
+    matchup_id: 5,
+    roster_id: 12,
+    points: 84.10, // Bonehead low score of the week
+    starters: ['Caleb Williams', 'Zamir White', 'Raheem Mostert', 'Calvin Ridley', 'Jaxon Smith-Njigba', 'Pat Freiermuth', 'Xavier Worthy', 'Tyler Bass', 'Texans DEF'],
+    starters_points: [11.2, 6.4, 7.1, 10.2, 12.5, 8.2, 14.5, 8.0, 6.0],
+    players_points: { 'Tyjae Spears': 16.2 }, // Left 16.2 on the bench!
+  },
+
+  // Matchup 6: Division battle (108.20 vs 96.40)
+  {
+    matchup_id: 6,
+    roster_id: 10,
+    points: 108.20,
+    starters: ['Baker Mayfield', 'Brian Robinson', 'Javonte Williams', 'Courtland Sutton', 'Jordan Addison', 'Cole Kmet', 'Romeo Doubs', 'Cairo Santos', 'Dolphins DEF'],
+    starters_points: [18.4, 15.2, 12.1, 16.5, 14.0, 7.0, 11.0, 8.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 6,
+    roster_id: 11,
+    points: 96.40,
+    starters: ['Tua Tagovailoa', 'D’Andre Swift', 'Tony Pollard', 'Keenan Allen', 'Amari Cooper', 'Jake Ferguson', 'George Pickens', 'Jason Sanders', 'Browns DEF'],
+    starters_points: [15.1, 11.2, 9.8, 13.5, 15.0, 8.8, 10.0, 6.0, 7.0],
+    players_points: {},
+  },
+];
+
+export const DEMO_CHOPPED_MATCHUPS_WEEK_2: SleeperMatchupItem[] = [
+  {
+    matchup_id: 0,
+    roster_id: 3,
+    points: 161.80, // Apex Survivor (Top score of Week 2)
+    starters: ['Josh Allen', 'Bijan Robinson', 'Jahmyr Gibbs', 'CeeDee Lamb', 'Amon-Ra St. Brown', 'Sam LaPorta', 'Davante Adams', 'Evan McPherson', '49ers DEF'],
+    starters_points: [31.4, 21.2, 18.5, 29.8, 22.1, 14.8, 11.0, 7.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 4,
+    points: 146.50,
+    starters: ['Lamar Jackson', 'Saquon Barkley', 'Isiah Pacheco', 'A.J. Brown', 'Garrett Wilson', 'Mark Andrews', 'Jaylen Waddle', 'Justin Tucker', 'Jets DEF'],
+    starters_points: [25.4, 31.2, 14.8, 20.1, 18.2, 12.4, 11.4, 8.0, 5.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 9,
+    points: 141.20,
+    starters: ['Jalen Hurts', 'Jonathan Taylor', 'Derrick Henry', 'Puka Nacua', 'Marvin Harrison Jr', 'Dalton Kincaid', 'Nico Collins', 'Brandon Aubrey', 'Chiefs DEF'],
+    starters_points: [24.1, 22.8, 19.4, 18.5, 21.2, 11.2, 12.0, 6.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 8,
+    points: 132.60,
+    starters: ['Jordan Love', 'Alvin Kamara', 'David Montgomery', 'Cooper Kupp', 'Christian Kirk', 'Evan Engram', 'Terry McLaurin', 'Matt Gay', 'Eagles DEF'],
+    starters_points: [24.5, 26.2, 14.8, 22.1, 12.5, 10.5, 11.0, 5.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 1,
+    points: 121.20,
+    starters: ['Patrick Mahomes', 'Christian McCaffrey', 'Kyren Williams', 'Justin Jefferson', 'Tyreek Hill', 'Travis Kelce', 'Breece Hall', 'Harrison Butker', 'Ravens DEF'],
+    starters_points: [19.2, 18.5, 14.2, 21.0, 16.4, 11.0, 12.9, 5.0, 3.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 6,
+    points: 118.90,
+    starters: ['Dak Prescott', 'Travis Etienne', 'Rachaad White', 'Chris Olave', 'Michael Pittman', 'Kyle Pitts', 'Tee Higgins', 'Jake Elliott', 'Cowboys DEF'],
+    starters_points: [19.2, 18.4, 11.2, 17.5, 16.1, 10.5, 12.0, 7.0, 7.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 5,
+    points: 117.40,
+    starters: ['C.J. Stroud', 'James Cook', 'Kenneth Walker', 'Mike Evans', 'Deebo Samuel', 'George Kittle', 'DJ Moore', 'Cameron Dicker', 'Bills DEF'],
+    starters_points: [18.2, 15.4, 16.2, 19.1, 15.0, 11.5, 11.0, 6.0, 5.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 10,
+    points: 108.20,
+    starters: ['Baker Mayfield', 'Brian Robinson', 'Javonte Williams', 'Courtland Sutton', 'Jordan Addison', 'Cole Kmet', 'Romeo Doubs', 'Cairo Santos', 'Dolphins DEF'],
+    starters_points: [18.4, 15.2, 12.1, 16.5, 14.0, 7.0, 11.0, 8.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 7,
+    points: 106.80,
+    starters: ['Brock Purdy', 'Josh Jacobs', 'Joe Mixon', 'DeVonta Smith', 'DK Metcalf', 'David Njoku', 'Zay Flowers', 'Younghoe Koo', 'Steelers DEF'],
+    starters_points: [16.8, 14.5, 12.2, 18.4, 15.1, 8.4, 9.4, 6.0, 6.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 11,
+    points: 96.40, // Narrow Escape (Survives cut by 12.3 pts!)
+    starters: ['Tua Tagovailoa', 'D’Andre Swift', 'Tony Pollard', 'Keenan Allen', 'Amari Cooper', 'Jake Ferguson', 'George Pickens', 'Jason Sanders', 'Browns DEF'],
+    starters_points: [15.1, 11.2, 9.8, 13.5, 15.0, 8.8, 10.0, 6.0, 7.0],
+    players_points: {},
+  },
+  {
+    matchup_id: 0,
+    roster_id: 12,
+    points: 84.10, // 🪓 CHOPPED IN WEEK 2! Roster dumped to waiver wire
+    starters: ['Caleb Williams', 'Zamir White', 'Raheem Mostert', 'Calvin Ridley', 'Jaxon Smith-Njigba', 'Pat Freiermuth', 'Xavier Worthy', 'Tyler Bass', 'Texans DEF'],
+    starters_points: [11.2, 6.4, 7.1, 10.2, 12.5, 8.2, 14.5, 8.0, 6.0],
+    players_points: { 'Tyjae Spears': 16.2 },
+  },
+];
+

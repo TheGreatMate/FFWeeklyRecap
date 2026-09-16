@@ -13,8 +13,10 @@ import {
   TrendingUp,
   AlertTriangle,
   Info,
+  Download,
 } from 'lucide-react';
 import { GazetteReportData } from '../types';
+import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
 
 interface WeeklyGazetteReportProps {
   data: GazetteReportData;
@@ -55,7 +57,15 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
   };
 
   const handlePrint = () => {
-    window.print();
+    printGazetteElement('gazette-document');
+  };
+
+  const handleDownloadStandalone = () => {
+    downloadGazetteHTML(
+      document.getElementById('gazette-document'),
+      localData.leagueName,
+      localData.week
+    );
   };
 
   return (
@@ -69,9 +79,10 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
           <span>3-Page Executive Weekly League Newspaper (Print & PDF Ready)</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            id="gazette-customize-text-btn"
             onClick={() => setIsEditing(!isEditing)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
               isEditing
@@ -86,6 +97,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
           {onResetData && (
             <button
               type="button"
+              id="gazette-reset-data-btn"
               onClick={onResetData}
               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
               title="Reset to default calculations"
@@ -96,8 +108,21 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
 
           <button
             type="button"
+            id="gazette-download-html-btn"
+            onClick={handleDownloadStandalone}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+            title="Download standalone HTML file with pre-formatted print styles"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-300" />
+            <span>Save Standalone HTML</span>
+          </button>
+
+          <button
+            type="button"
+            id="gazette-top-print-btn"
             onClick={handlePrint}
             className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer"
+            title="Open print dialog or save as PDF"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Print / Save as PDF</span>
