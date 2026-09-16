@@ -24,6 +24,22 @@ interface WeeklyGazetteReportProps {
   onResetData?: () => void;
 }
 
+function cleanDisplayStory(text: string): string {
+  if (!text) return '';
+  return text
+    // Remove tone labels e.g. *Tone: ROAST*, Tone: ROAST, Tone Requirements: ...
+    .replace(/^\*?Tone\s*:\s*[A-Z_a-z\s-]+\*?\s*/gim, '')
+    .replace(/^Tone\s+(?:Requirements?|Guidelines?):[^\r\n]*\r?\n?/gim, '')
+    // Strip leading markdown headers e.g. # ... or ## ...
+    .replace(/^#+\s+[^\r\n]*\r?\n?/gm, '')
+    // Strip bullet points at start of line
+    .replace(/^[-*]\s+/gm, '')
+    // Strip bold/italic markdown marks
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .trim();
+}
+
 export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
   data,
   onUpdateData,
@@ -439,7 +455,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                 />
               ) : (
                 <p className="text-xs sm:text-sm text-slate-700 leading-relaxed font-serif">
-                  {localData.leadStory}
+                  {cleanDisplayStory(localData.leadStory)}
                 </p>
               )}
 

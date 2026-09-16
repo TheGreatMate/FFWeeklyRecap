@@ -18,6 +18,13 @@ import {
   Printer,
   DollarSign,
   Settings2,
+  Key,
+  Eye,
+  EyeOff,
+  Trash2,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import {
@@ -104,7 +111,89 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [generationSource, setGenerationSource] = useState<'ai' | 'builtin' | null>('builtin');
+  const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
+  const [customApiKey, setCustomApiKey] = useState<string>(() => {
+    try {
+      return localStorage.getItem('sleeper_custom_gemini_key') || '';
+    } catch {
+      return '';
+    }
+  });
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [inputApiKey, setInputApiKey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isVerifyingKey, setIsVerifyingKey] = useState(false);
+  const [keyVerifyMessage, setKeyVerifyMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Check if Gemini API key is configured on server
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => {
+        setHasGeminiKey(Boolean(data.hasGeminiKey));
+      })
+      .catch(() => {
+        setHasGeminiKey(false);
+      });
+  }, []);
+
+  const hasEffectiveKey = Boolean(hasGeminiKey || customApiKey);
+
+  const handleSaveAndVerifyKey = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = inputApiKey.trim();
+    if (!trimmed) {
+      setKeyVerifyMessage({ type: 'error', text: 'Please paste a Gemini API key.' });
+      return;
+    }
+    setIsVerifyingKey(true);
+    setKeyVerifyMessage(null);
+    try {
+      const res = await fetch('/api/gemini/verify-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setCustomApiKey(trimmed);
+        try {
+          localStorage.setItem('sleeper_custom_gemini_key', trimmed);
+        } catch {}
+        setKeyVerifyMessage({ type: 'success', text: 'Success! Gemini API Key verified and saved.' });
+        setInputApiKey('');
+        setTimeout(() => {
+          setShowApiKeyModal(false);
+          setKeyVerifyMessage(null);
+        }, 1600);
+      } else {
+        setKeyVerifyMessage({
+          type: 'error',
+          text: data.error || 'Invalid API key. Please check your key from Google AI Studio.',
+        });
+      }
+    } catch {
+      setKeyVerifyMessage({
+        type: 'error',
+        text: 'Connection failed while verifying the key.',
+      });
+    } finally {
+      setIsVerifyingKey(false);
+    }
+  };
+
+  const handleRemoveKey = () => {
+    setCustomApiKey('');
+    try {
+      localStorage.removeItem('sleeper_custom_gemini_key');
+    } catch {}
+    setKeyVerifyMessage(null);
+    setInputApiKey('');
+    setActionNotice('Custom API key removed from browser storage.');
+    setTimeout(() => setActionNotice(null), 3000);
+  };
 
   // Switch tone and immediately regenerate both Gazette and notes
   const handleToneSelect = (newTone: NoteTone) => {
@@ -239,9 +328,14 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
     setAiError(null);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (customApiKey) {
+        headers['x-gemini-api-key'] = customApiKey;
+      }
+
       const res = await fetch('/api/gemini/generate-notes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           leagueName,
           week: selectedWeek,
@@ -253,6 +347,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
           duesNote,
           includePowerRankings,
           includeWaiverAdvice,
+          customApiKey: customApiKey || undefined,
         }),
       });
 
@@ -262,13 +357,34 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       }
 
       if (data.notes) {
-        setGeneratedNotes(data.notes);
+        // Strip any tone labels or prompt echoes that might have slipped through
+        const cleanNotes = data.notes
+          .replace(/^\*?Tone\s*:\s*[A-Z_a-z\s-]+\*?\r?\n+/gim, '')
+          .replace(/^Tone\s+(?:Requirements?|Guidelines?):[^\r\n]*\r?\n+/gim, '')
+          .trim();
+
+        setGeneratedNotes(cleanNotes);
         setGenerationSource(data.isAi ? 'ai' : 'builtin');
-        // Also update the lead story in the gazette data
-        setGazetteData((prev) => ({
-          ...prev,
-          leadStory: `${data.notes.slice(0, 320)}...`,
-        }));
+
+        // Refresh the gazette data with the chosen tone, motto, announcements, etc.
+        const freshGazette = buildGazetteReportData(
+          leagueName,
+          stats,
+          choppedStats,
+          format,
+          sidePotConfig,
+          motto,
+          editionTag,
+          tone
+        );
+        setGazetteData(freshGazette);
+
+        setActionNotice(
+          data.isAi
+            ? '✨ Report refreshed with Gemini AI!'
+            : '⚡ Report refreshed using Built-in Engine (No API key needed)!'
+        );
+        setTimeout(() => setActionNotice(null), 3500);
       } else {
         throw new Error('No content returned');
       }
@@ -276,6 +392,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       console.warn('Note generation notice:', err.message);
       setGenerationSource('builtin');
       handleGenerateTemplate(tone);
+      setActionNotice('⚡ Report generated with Built-in Engine!');
+      setTimeout(() => setActionNotice(null), 3500);
     } finally {
       setIsGeneratingAI(false);
     }
@@ -296,6 +414,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
     );
     setGazetteData(updated);
     setGeneratedNotes(gazetteToMarkdown(updated));
+    setActionNotice('⚡ Recalculated with Offline Engine');
+    setTimeout(() => setActionNotice(null), 3000);
   };
 
   const handleCopy = async () => {
@@ -574,6 +694,13 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
 
           {/* Generation Action Buttons */}
           <div className="flex flex-col gap-2 pt-2">
+            {/* Transient Action Confirmation */}
+            {actionNotice && (
+              <div className="py-2 px-3 rounded-xl bg-emerald-950/90 border border-emerald-600/70 text-emerald-200 text-xs text-center font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 animate-in fade-in slide-in-from-top-1">
+                <span>{actionNotice}</span>
+              </div>
+            )}
+
             <button
               type="button"
               id="generate-ai-notes-btn"
@@ -589,6 +716,11 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Drafting Weekly Gazette Report...</span>
+                </>
+              ) : hasEffectiveKey ? (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Generate AI Gazette Report (Gemini)</span>
                 </>
               ) : (
                 <>
@@ -609,24 +741,159 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
             </button>
           </div>
 
-          {/* Engine Status Indicator */}
-          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1.5">
-              {generationSource === 'ai' ? (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-slate-300 font-medium">Gemini AI Active</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-slate-300 font-medium">Built-in Engine</span>
-                </>
-              )}
-            </span>
-            <span className="text-slate-400">
-              {generationSource === 'ai' ? 'Cloud Model' : 'No API Key Required'}
-            </span>
+          {/* Engine Status & API Key Drawer */}
+          <div className="flex flex-col gap-2">
+            <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1.5">
+                {hasEffectiveKey ? (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-slate-200 font-medium">
+                      {customApiKey ? 'Custom Key Active' : 'Gemini AI Ready'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-emerald-300 font-medium">Built-in Offline Engine</span>
+                  </>
+                )}
+              </span>
+
+              <button
+                type="button"
+                id="toggle-api-key-drawer-btn"
+                onClick={() => {
+                  setShowApiKeyModal((prev) => !prev);
+                  setKeyVerifyMessage(null);
+                }}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900 hover:bg-slate-800 text-amber-400 hover:text-amber-300 border border-amber-500/30 font-semibold transition-colors cursor-pointer"
+              >
+                <Key className="w-3 h-3" />
+                <span>{customApiKey ? 'Key Connected' : 'Add API Key'}</span>
+                {showApiKeyModal ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            </div>
+
+            {/* Expandable Custom Gemini API Key Drawer */}
+            {showApiKeyModal && (
+              <div
+                id="gemini-api-key-panel"
+                className="p-3 rounded-xl bg-slate-900 border border-amber-500/40 shadow-xl flex flex-col gap-2.5 text-xs animate-in fade-in slide-in-from-top-1"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-200 text-xs">
+                    <Key className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Gemini API Key Settings</span>
+                  </div>
+                  {customApiKey && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700/80 text-emerald-300 font-bold">
+                      Saved & Active
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Enter your Google Gemini API key to enable cloud AI model generation. Your key is stored locally in your browser.
+                </p>
+
+                {customApiKey && (
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
+                    <span className="font-mono text-slate-300 tracking-wider">
+                      ••••••••••••{customApiKey.slice(-4)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveKey}
+                      className="text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer font-medium"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
+
+                <form onSubmit={handleSaveAndVerifyKey} className="flex flex-col gap-2">
+                  <label htmlFor="gemini-api-key-input" className="text-[10px] uppercase font-bold text-slate-400">
+                    {customApiKey ? 'Replace API Key' : 'Paste API Key'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="gemini-api-key-input"
+                      type={showPassword ? 'text' : 'password'}
+                      value={inputApiKey}
+                      onChange={(e) => setInputApiKey(e.target.value)}
+                      placeholder="AIzaSy..."
+                      className="w-full pl-3 pr-9 py-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-200 text-xs font-mono focus:border-amber-400 focus:outline-none placeholder:text-slate-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 cursor-pointer p-1"
+                      title={showPassword ? 'Hide Key' : 'Show Key'}
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {keyVerifyMessage && (
+                    <div
+                      className={`p-2 rounded-lg text-[11px] leading-tight ${
+                        keyVerifyMessage.type === 'success'
+                          ? 'bg-emerald-950/80 border border-emerald-700 text-emerald-300 font-medium'
+                          : 'bg-rose-950/80 border border-rose-700 text-rose-300'
+                      }`}
+                    >
+                      {keyVerifyMessage.text}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      type="submit"
+                      disabled={isVerifyingKey || !inputApiKey.trim()}
+                      className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      {isVerifyingKey ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying Key...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Verify & Save</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowApiKeyModal(false);
+                        setInputApiKey('');
+                        setKeyVerifyMessage(null);
+                      }}
+                      className="py-1.5 px-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition-colors cursor-pointer"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </form>
+
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Need an API key?</span>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-amber-400 hover:text-amber-300 underline font-medium flex items-center gap-1"
+                  >
+                    <span>Get free Google AI Studio key</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
