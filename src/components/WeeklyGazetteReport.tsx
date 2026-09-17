@@ -399,6 +399,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.blowoutOfTheWeek.winner)}`
                               }
                               alt={localData.blowoutOfTheWeek.winner}
+                              crossOrigin="anonymous"
                               referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-md bg-white"
                             />
@@ -432,6 +433,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.blowoutOfTheWeek.loser)}`
                               }
                               alt={localData.blowoutOfTheWeek.loser}
+                              crossOrigin="anonymous"
                               referrerPolicy="no-referrer"
                               className={`w-10 h-10 rounded-full object-cover border-2 ${
                                 localData.isUpcoming ? 'border-indigo-400' : 'border-rose-500/80 grayscale contrast-125'
@@ -486,6 +488,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.gmOfTheWeek.manager)}`
                               }
                               alt={localData.gmOfTheWeek.manager}
+                              crossOrigin="anonymous"
                               referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-amber-500 shadow-md bg-white"
                             />
@@ -539,6 +542,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.galaxyBrainMove.manager)}`
                               }
                               alt={localData.galaxyBrainMove.manager}
+                              crossOrigin="anonymous"
                               referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-indigo-400 shadow-md bg-white"
                             />
@@ -596,6 +600,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                           <img
                             src={team.avatarUrl}
                             alt={team.manager}
+                            crossOrigin="anonymous"
                             referrerPolicy="no-referrer"
                             className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                           />
@@ -659,6 +664,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <img
                           src={localData.leadPhoto.primaryAvatarUrl}
                           alt={localData.leadPhoto.primaryName || 'Featured Team'}
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           className="w-14 h-14 rounded-full object-cover border-2 border-slate-900 shadow bg-white"
                         />
@@ -674,6 +680,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                           <img
                             src={localData.leadPhoto.opponentAvatarUrl}
                             alt={localData.leadPhoto.opponentName || 'Opponent'}
+                            crossOrigin="anonymous"
                             referrerPolicy="no-referrer"
                             className="w-12 h-12 rounded-full object-cover border border-slate-400 shadow bg-white"
                           />
@@ -760,6 +767,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <img
                           src={localData.unluckyBastard.avatarUrl}
                           alt={localData.unluckyBastard.manager}
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           className="w-10 h-10 rounded-full object-cover border-2 border-rose-400 shadow-sm bg-white"
                         />
@@ -856,6 +864,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <img
                           src={m.winnerAvatarUrl}
                           alt={m.winner}
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-500 bg-white"
                         />
@@ -870,6 +879,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <img
                           src={m.loserAvatarUrl}
                           alt={m.loser}
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                         />
@@ -915,6 +925,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                           <img
                             src={team.avatarUrl}
                             alt={team.manager}
+                            crossOrigin="anonymous"
                             referrerPolicy="no-referrer"
                             className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                           />
@@ -962,6 +973,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                       <img
                         src={localData.sidePotDesk.pointsWinnerAvatarUrl}
                         alt={localData.sidePotDesk.pointsWinnerName}
+                        crossOrigin="anonymous"
                         referrerPolicy="no-referrer"
                         className="w-9 h-9 rounded-full object-cover border-2 border-amber-500 shadow-sm shrink-0 bg-white"
                       />
@@ -984,6 +996,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                       <img
                         src={localData.sidePotDesk.blowoutWinnerAvatarUrl}
                         alt={localData.sidePotDesk.blowoutWinnerName}
+                        crossOrigin="anonymous"
                         referrerPolicy="no-referrer"
                         className="w-9 h-9 rounded-full object-cover border-2 border-red-500 shadow-sm shrink-0 bg-white"
                       />
@@ -1057,6 +1070,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 <img
                                   src={b.avatarUrl}
                                   alt={b.manager}
+                                  crossOrigin="anonymous"
                                   referrerPolicy="no-referrer"
                                   className="w-5 h-5 rounded-full object-cover border border-amber-400 shrink-0 bg-white"
                                 />
@@ -1205,6 +1219,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <img
                           src={p.avatarUrl}
                           alt={p.manager}
+                          crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                         />
