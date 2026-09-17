@@ -1,46 +1,241 @@
 @import "tailwindcss";
 
-@media print {
-  /* Hide non-printable app components */
-  nav,
-  header,
-  aside,
-  button,
-  input,
-  textarea,
-  select,
-  .print\:hidden,
-  #view-toggle-gazette,
-  #view-toggle-preview,
-  #view-toggle-raw,
-  #generate-ai-notes-btn,
-  #generate-template-notes-btn,
-  #copy-notes-btn,
-  #download-notes-btn {
-    display: none !important;
-  }
+/* =========================================================================
+   GAZETTE DARK MODE (Midnight Edition)
+   ========================================================================= */
+#gazette-document.gazette-dark {
+  background-color: #0b0f19 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #1e293b !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+}
 
-  /* Reset body and html container for pure page flow */
+#gazette-document.gazette-dark section {
+  border-color: #1e293b !important;
+}
+
+#gazette-document.gazette-dark header {
+  border-color: #334155 !important;
+}
+
+#gazette-document.gazette-dark h1,
+#gazette-document.gazette-dark h2,
+#gazette-document.gazette-dark h3,
+#gazette-document.gazette-dark h4,
+#gazette-document.gazette-dark h5,
+#gazette-document.gazette-dark h6 {
+  color: #ffffff !important;
+}
+
+#gazette-document.gazette-dark .text-slate-950,
+#gazette-document.gazette-dark .text-slate-900,
+#gazette-document.gazette-dark .text-slate-800 {
+  color: #f8fafc !important;
+}
+
+#gazette-document.gazette-dark .text-slate-700,
+#gazette-document.gazette-dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+#gazette-document.gazette-dark .text-slate-500,
+#gazette-document.gazette-dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+#gazette-document.gazette-dark .border-slate-200,
+#gazette-document.gazette-dark .border-slate-300 {
+  border-color: #1e293b !important;
+}
+
+#gazette-document.gazette-dark .border-slate-900 {
+  border-color: #334155 !important;
+}
+
+/* Comprehensive slate background overrides for dark mode */
+#gazette-document.gazette-dark .bg-slate-50,
+#gazette-document.gazette-dark .bg-slate-50\/60,
+#gazette-document.gazette-dark .bg-slate-50\/70,
+#gazette-document.gazette-dark .bg-slate-50\/80,
+#gazette-document.gazette-dark .bg-slate-100,
+#gazette-document.gazette-dark .bg-slate-100\/90,
+#gazette-document.gazette-dark [class*="bg-slate-50"],
+#gazette-document.gazette-dark [class*="bg-slate-100"] {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+  color: #e2e8f0 !important;
+}
+
+#gazette-document.gazette-dark .bg-white {
+  background-color: #0b0f19 !important;
+}
+
+#gazette-document.gazette-dark .divide-slate-100,
+#gazette-document.gazette-dark .divide-slate-200,
+#gazette-document.gazette-dark [class*="divide-slate-"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* Specific Section Theming in Dark Mode */
+#gazette-document.gazette-dark .bg-rose-50\/40,
+#gazette-document.gazette-dark .bg-rose-50,
+#gazette-document.gazette-dark .bg-rose-50\/70,
+#gazette-document.gazette-dark [class*="bg-rose-50"] {
+  background-color: rgba(136, 19, 55, 0.25) !important;
+  border-color: #881337 !important;
+  color: #fecdd3 !important;
+}
+
+#gazette-document.gazette-dark .border-rose-200\/90,
+#gazette-document.gazette-dark .border-rose-200,
+#gazette-document.gazette-dark .border-rose-300 {
+  border-color: #881337 !important;
+}
+
+#gazette-document.gazette-dark .text-rose-600,
+#gazette-document.gazette-dark .text-rose-700,
+#gazette-document.gazette-dark .text-rose-800 {
+  color: #fb7185 !important;
+}
+
+#gazette-document.gazette-dark .bg-emerald-50\/40,
+#gazette-document.gazette-dark .bg-emerald-50,
+#gazette-document.gazette-dark .bg-emerald-50\/60,
+#gazette-document.gazette-dark [class*="bg-emerald-50"] {
+  background-color: rgba(6, 78, 59, 0.3) !important;
+  border-color: #047857 !important;
+  color: #a7f3d0 !important;
+}
+
+#gazette-document.gazette-dark .border-emerald-200\/90,
+#gazette-document.gazette-dark .border-emerald-200,
+#gazette-document.gazette-dark .border-emerald-300 {
+  border-color: #047857 !important;
+}
+
+#gazette-document.gazette-dark .text-emerald-600,
+#gazette-document.gazette-dark .text-emerald-700,
+#gazette-document.gazette-dark .text-emerald-800 {
+  color: #34d399 !important;
+}
+
+#gazette-document.gazette-dark .bg-amber-50\/40,
+#gazette-document.gazette-dark .bg-amber-50,
+#gazette-document.gazette-dark .bg-amber-50\/60,
+#gazette-document.gazette-dark [class*="bg-amber-50"] {
+  background-color: rgba(120, 53, 15, 0.28) !important;
+  border-color: #92400e !important;
+  color: #fde68a !important;
+}
+
+#gazette-document.gazette-dark .bg-amber-100\/60,
+#gazette-document.gazette-dark .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.4) !important;
+  border-color: #92400e !important;
+  color: #fde68a !important;
+}
+
+#gazette-document.gazette-dark .border-amber-200,
+#gazette-document.gazette-dark .border-amber-300 {
+  border-color: #92400e !important;
+}
+
+#gazette-document.gazette-dark .text-amber-600,
+#gazette-document.gazette-dark .text-amber-700,
+#gazette-document.gazette-dark .text-amber-800,
+#gazette-document.gazette-dark .text-amber-900,
+#gazette-document.gazette-dark .text-amber-950 {
+  color: #fbbf24 !important;
+}
+
+#gazette-document.gazette-dark .text-indigo-600,
+#gazette-document.gazette-dark .text-indigo-700 {
+  color: #818cf8 !important;
+}
+
+/* Red / Side Pot Desk Dark Mode */
+#gazette-document.gazette-dark .bg-red-50\/50,
+#gazette-document.gazette-dark .bg-red-100\/70,
+#gazette-document.gazette-dark [class*="bg-red-50"] {
+  background-color: rgba(136, 19, 55, 0.3) !important;
+  color: #fecdd3 !important;
+}
+
+#gazette-document.gazette-dark .text-red-900,
+#gazette-document.gazette-dark .text-red-800,
+#gazette-document.gazette-dark .text-red-700 {
+  color: #fca5a5 !important;
+}
+
+#gazette-document.gazette-dark .border-red-200 {
+  border-color: #881337 !important;
+}
+
+/* Tables and ribbons in Dark Mode */
+#gazette-document.gazette-dark table {
+  color: #f1f5f9 !important;
+}
+
+#gazette-document.gazette-dark th {
+  background-color: #111827 !important;
+  color: #ffffff !important;
+  border-color: #1f2937 !important;
+}
+
+#gazette-document.gazette-dark td {
+  border-color: #1e293b !important;
+}
+
+#gazette-document.gazette-dark tr.hover\:bg-slate-50:hover,
+#gazette-document.gazette-dark tr:hover {
+  background-color: #1e293b88 !important;
+}
+
+/* Edit Mode Controls inside Dark Gazette */
+#gazette-document.gazette-dark input[type="text"],
+#gazette-document.gazette-dark textarea {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  border-color: #f59e0b !important;
+}
+
+#gazette-document.gazette-dark input[type="text"]:focus,
+#gazette-document.gazette-dark textarea:focus {
+  outline: 2px solid #fbbf24 !important;
+}
+
+/* =========================================================================
+   PRINT ISOLATION: ONLY THE GAZETTE DOCUMENT PRINTS
+   ========================================================================= */
+@media print {
+  /* Complete body & html reset for pristine single-document printing */
   html,
-  body,
-  #root,
-  main,
-  div[class*="min-h-screen"],
-  div[class*="overflow-y-auto"] {
+  body {
     background-color: #ffffff !important;
-    color: #000000 !important;
-    overflow: visible !important;
-    height: auto !important;
-    min-height: auto !important;
-    max-height: none !important;
+    color: #0f172a !important;
     margin: 0 !important;
     padding: 0 !important;
-    box-shadow: none !important;
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
   }
 
-  /* Force white background and dark text on Gazette */
+  /* Make everything in the document invisible by default */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Make ONLY #gazette-document and its descendants visible */
+  #gazette-document,
+  #gazette-document * {
+    visibility: visible;
+  }
+
+  /* Position #gazette-document at top-left, flush with print page margin */
   #gazette-document {
-    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
@@ -50,6 +245,68 @@
     border-radius: 0 !important;
     background-color: #ffffff !important;
     color: #0f172a !important;
+    overflow: visible !important;
+    z-index: 99999 !important;
+  }
+
+  /* When printing, always use clean white background & dark text for toner saving and readability */
+  #gazette-document.gazette-dark {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  #gazette-document.gazette-dark h1,
+  #gazette-document.gazette-dark h2,
+  #gazette-document.gazette-dark h3,
+  #gazette-document.gazette-dark h4,
+  #gazette-document.gazette-dark h5,
+  #gazette-document.gazette-dark h6,
+  #gazette-document.gazette-dark .text-slate-950,
+  #gazette-document.gazette-dark .text-slate-900,
+  #gazette-document.gazette-dark .text-slate-800 {
+    color: #0f172a !important;
+  }
+
+  #gazette-document.gazette-dark .text-slate-700,
+  #gazette-document.gazette-dark .text-slate-600 {
+    color: #334155 !important;
+  }
+
+  #gazette-document.gazette-dark .bg-slate-50,
+  #gazette-document.gazette-dark .bg-slate-50\/60,
+  #gazette-document.gazette-dark .bg-slate-50\/70,
+  #gazette-document.gazette-dark .bg-slate-100 {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Completely remove any interactive buttons or chrome */
+  nav,
+  header:not(#gazette-document header),
+  aside,
+  footer:not(#gazette-document footer),
+  button,
+  input,
+  textarea,
+  select,
+  .print\:hidden,
+  .no-print,
+  #view-toggle-gazette,
+  #view-toggle-preview,
+  #view-toggle-raw,
+  #generate-ai-notes-btn,
+  #generate-template-notes-btn,
+  #copy-notes-btn,
+  #download-notes-btn,
+  #action-bar-print-gazette-btn,
+  #gazette-top-print-btn,
+  #gazette-customize-text-btn,
+  #gazette-reset-data-btn,
+  #gazette-download-html-btn,
+  #gazette-theme-toggle-btn {
+    display: none !important;
   }
 
   /* Page breaks between pages 1, 2, and 3 */
@@ -67,3 +324,4 @@
     margin: 0.35in;
   }
 }
+

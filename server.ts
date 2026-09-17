@@ -606,7 +606,7 @@ ${duesNote ? `LEAGUE DUES / TREASURY NOTE TO INCLUDE:\n${duesNote}\n` : ''}
 
 ${
   !isSidePotEnabled
-    ? `SIDE POT POLICY: The weekly side pot is DISABLED / NOT opted-in for this league. DO NOT generate a Side Pot Desk section, and do NOT mention side pot entry fees or payouts.`
+    ? `SIDE POT POLICY: The weekly side pot is DISABLED / NOT opted-in for this league. DO NOT generate a Side Pot Desk section, and DO NOT mention side pot, side pot entry fees, or side pot payouts anywhere in the report (including the Unlucky Bastard Club or Commissioner's Notebook).`
     : `SIDE POT ACTIVE: Total pot ($${(sidePotConfig?.totalPot || 25).toFixed(2)}), #1 Points winner ($${(sidePotConfig?.pointsWinnerPayout || 12.5).toFixed(2)}), Biggest Blowout ($${(sidePotConfig?.blowoutWinnerPayout || 12.5).toFixed(2)}), Next week fee ($${sidePotConfig?.entryFee || 5}).`
 }
 
@@ -627,7 +627,7 @@ ${isSidePotEnabled ? `7. SIDE POT DESK: Total pot ($${(sidePotConfig?.totalPot |
    - STOCK UP (hot contenders)
    - STOCK DOWN (sub-100 scorers or cold stars)
    - GALAXY BRAIN MOVE
-   - BONEHEAD MOVE / HINDSIGHT DESK (Roast the start/sit blunder with creative, varied phrasing! Never use the exact same sentence template or repetitive formula. Use angles like the agonizing "what-if", sleepless nights over a benched boom, how swapping the bench player in would have flipped the loss into an outright win or trimmed a beatdown, or sarcastic film-room breakdown of points left on the pine.)
+   - BONEHEAD MOVE / HINDSIGHT DESK (Roast the start/sit blunder with creative, varied phrasing! Never use the exact same sentence template or repetitive formula. If mentioning start/sit blunders or regrets, only mention each team ONCE—never mention the same team twice in the Hindsight / bonehead section. Use angles like the agonizing "what-if", sleepless nights over a benched boom, how swapping the bench player in would have flipped the loss into an outright win or trimmed a beatdown, or sarcastic film-room breakdown of points left on the pine.)
    - LEAGUE CANON (narratives, rivalries, and lore)
    - AROUND THE LEAGUE (scoring trends, high averages)
    - WEEK WARNING (${isSidePotEnabled ? `side pot fee & TNF deadline: "Pay your damn five dollars"` : `lineup check & waiver deadlines before Thursday Night Football kickoff`})

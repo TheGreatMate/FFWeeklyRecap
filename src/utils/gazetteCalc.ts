@@ -496,8 +496,12 @@ export function buildGazetteReportData(
         points: unlucky.team.points,
         opponent: unlucky.matchup.winner.ownerName,
         opponentPts: unlucky.matchup.winner.points,
-        consolationPrize: `$${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout`,
-        blurb: `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. The consolation prize: a $${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout.`,
+        consolationPrize: sidePotConfig.enabled
+          ? `$${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout`
+          : 'High-scoring sympathy & moral victory',
+        blurb: sidePotConfig.enabled
+          ? `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. The consolation prize: a $${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout.`
+          : `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. No victory or payout to show for it—just pure heartbreak and high-scoring sympathy.`,
       }
     : null;
 
@@ -759,13 +763,23 @@ export function gazetteToMarkdown(g: GazetteReportData): string {
   }
 
   if (g.positionalBlunders && g.positionalBlunders.length > 0) {
-    md += `### 🤦 HINDSIGHT 20/20: BENCH REGRETS & "IF ONLY..." DESK\n\n`;
-    g.positionalBlunders.slice(0, 3).forEach((b) => {
-      const tagStr = b.flavorTag ? ` [${b.flavorTag}]` : '';
-      const headlineStr = b.headline ? ` *${b.headline}* — ` : ' ';
-      md += `- **${b.manager} (${b.teamName})**${tagStr}:${headlineStr}${b.blurb}\n`;
+    const seenTeams = new Set<string>();
+    const uniqueBlunders = g.positionalBlunders.filter((b) => {
+      const key = (b.teamName || b.manager).toLowerCase().trim();
+      if (seenTeams.has(key)) return false;
+      seenTeams.add(key);
+      return true;
     });
-    md += `\n`;
+
+    if (uniqueBlunders.length > 0) {
+      md += `### 🤦 HINDSIGHT 20/20: BENCH REGRETS & "IF ONLY..." DESK\n\n`;
+      uniqueBlunders.slice(0, 3).forEach((b) => {
+        const tagStr = b.flavorTag ? ` [${b.flavorTag}]` : '';
+        const headlineStr = b.headline ? ` *${b.headline}* — ` : ' ';
+        md += `- **${b.manager} (${b.teamName})**${tagStr}:${headlineStr}${b.blurb}\n`;
+      });
+      md += `\n`;
+    }
   }
 
   md += `---\n\n`;

@@ -1,28 +1,131 @@
 import { GazetteReportData } from '../types';
 
 /**
- * Robust print and PDF helper for the 3-Page Weekly Gazette Report.
- * Supports iframe embedding, HTTP Unraid local networks, and direct print dialogs.
+ * Robust print helper for the 3-Page Weekly Gazette Report.
+ * Uses an isolated hidden iframe so that ONLY the Gazette document prints,
+ * preventing any surrounding website UI, navbars, sidebars, or buttons from appearing.
  */
-export function printGazetteElement(elementId: string = 'gazette-document') {
+export function printGazetteElement(elementId: string = 'gazette-document', isDarkMode?: boolean) {
   const elem = document.getElementById(elementId);
-
-  // If in a standard desktop browser where window.print() is allowed
-  try {
+  if (!elem) {
     window.print();
-  } catch (err) {
-    console.warn('Direct window.print() failed, opening dedicated printable window:', err);
-    if (elem) {
-      openPrintWindowFromElement(elem);
-    }
+    return;
   }
+
+  const dark = isDarkMode !== undefined ? isDarkMode : elem.classList.contains('gazette-dark');
+
+  // Create or reuse hidden printable iframe to isolate the gazette document completely
+  let printFrame = document.getElementById('gazette-isolated-print-frame') as HTMLIFrameElement | null;
+  if (printFrame && printFrame.parentNode) {
+    printFrame.parentNode.removeChild(printFrame);
+  }
+
+  printFrame = document.createElement('iframe');
+  printFrame.id = 'gazette-isolated-print-frame';
+  printFrame.style.position = 'fixed';
+  printFrame.style.top = '-10000px';
+  printFrame.style.left = '-10000px';
+  printFrame.style.width = '1000px';
+  printFrame.style.height = '1400px';
+  printFrame.style.border = 'none';
+  printFrame.style.zIndex = '-9999';
+  document.body.appendChild(printFrame);
+
+  const frameDoc = printFrame.contentWindow?.document || printFrame.contentDocument;
+  if (!frameDoc) {
+    try {
+      window.print();
+    } catch (e) {
+      openPrintWindowFromElement(elem, dark);
+    }
+    return;
+  }
+
+  // Clone document styles
+  const headStyles: string[] = [];
+  document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
+    headStyles.push(node.outerHTML);
+  });
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>The Weekly Gazette</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  ${headStyles.join('\n')}
+  <style>
+    @page {
+      size: letter portrait;
+      margin: 0.35in;
+    }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .print\\:hidden, .no-print {
+      display: none !important;
+    }
+    .print\\:break-after-page, .page-break {
+      page-break-after: always !important;
+      break-after: page !important;
+    }
+    section {
+      page-break-inside: avoid;
+    }
+    #gazette-document {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+    /* Ensure dark text on printed output for legibility and toner savings */
+    #gazette-document.gazette-dark {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+    }
+  </style>
+</head>
+<body class="bg-white text-slate-900">
+  <div id="gazette-document" class="bg-white text-slate-900 font-sans">
+    ${elem.innerHTML}
+  </div>
+</body>
+</html>`;
+
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+
+  setTimeout(() => {
+    try {
+      printFrame?.contentWindow?.focus();
+      printFrame?.contentWindow?.print();
+    } catch (err) {
+      console.warn('Isolated iframe print failed, opening dedicated printable window:', err);
+      openPrintWindowFromElement(elem, isDarkMode);
+    }
+  }, 400);
 }
 
 /**
  * Opens a dedicated popup print window containing only the Gazette document
  * with inline typography and print stylesheets pre-loaded.
  */
-export function openPrintWindowFromElement(elem: HTMLElement) {
+export function openPrintWindowFromElement(elem: HTMLElement, isDarkMode: boolean = false) {
   const printWindow = window.open('', '_blank', 'width=1000,height=1200,menubar=no,toolbar=no,location=no,status=no');
   if (!printWindow) {
     alert('Pop-up blocked. Please allow pop-ups for this site or use the "Download HTML / Print File" button.');
@@ -93,7 +196,6 @@ export function openPrintWindowFromElement(elem: HTMLElement) {
 
   <script>
     window.addEventListener('load', () => {
-      // Auto-trigger print after styles load
       setTimeout(() => {
         window.print();
       }, 600);
@@ -112,12 +214,19 @@ export function openPrintWindowFromElement(elem: HTMLElement) {
  * Downloads a standalone, self-contained HTML file of the Gazette report
  * that can be double-clicked to view and saved directly to PDF from any browser.
  */
-export function downloadGazetteHTML(elem?: HTMLElement | null, leagueName: string = 'Fantasy_League', week: number = 1) {
+export function downloadGazetteHTML(
+  elem?: HTMLElement | null,
+  leagueName: string = 'Fantasy_League',
+  week: number = 1,
+  isDarkMode?: boolean
+) {
   const target = elem || document.getElementById('gazette-document');
   if (!target) {
     alert('Gazette document not found to export. Please make sure Gazette View is selected.');
     return;
   }
+
+  const dark = isDarkMode !== undefined ? isDarkMode : target.classList.contains('gazette-dark');
 
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
@@ -132,14 +241,15 @@ export function downloadGazetteHTML(elem?: HTMLElement | null, leagueName: strin
   <style>
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: #f1f5f9;
-      color: #0f172a;
+      background-color: ${dark ? '#030712' : '#f1f5f9'};
+      color: ${dark ? '#f8fafc' : '#0f172a'};
       margin: 0;
       padding: 24px;
     }
     @media print {
       body {
         background-color: #ffffff !important;
+        color: #0f172a !important;
         padding: 0 !important;
         margin: 0 !important;
       }
@@ -157,7 +267,7 @@ export function downloadGazetteHTML(elem?: HTMLElement | null, leagueName: strin
     }
   </style>
 </head>
-<body>
+<body class="${dark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'}">
   <div class="no-print" style="max-width: 900px; margin: 0 auto 16px auto; background: #0f172a; color: white; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px;">
     <div>
       <h3 style="margin: 0; font-size: 14px; font-weight: bold;">📰 ${leagueName} - Week ${week} Gazette</h3>
@@ -167,7 +277,7 @@ export function downloadGazetteHTML(elem?: HTMLElement | null, leagueName: strin
       🖨️ Print / Save as PDF
     </button>
   </div>
-  <div style="max-width: 900px; margin: 0 auto; background: white; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden;">
+  <div style="max-width: 900px; margin: 0 auto; background: ${dark ? '#0b0f19' : 'white'}; border: 1px solid ${dark ? '#1e293b' : '#e2e8f0'}; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); overflow: hidden;">
     ${target.innerHTML}
   </div>
 </body>

@@ -398,8 +398,21 @@ export function calculateWeekStats(
       return b.diff - a.diff;
     });
 
+    // Only mention each team once (keep the most impactful blunder per team)
+    const seenTeams = new Set<string>();
+    const uniqueCandidates: typeof rawCandidates = [];
+    for (const cand of rawCandidates) {
+      const teamKey = cand.team.rosterId
+        ? String(cand.team.rosterId)
+        : (cand.team.teamName || cand.team.ownerName).toLowerCase().trim();
+      if (!seenTeams.has(teamKey)) {
+        seenTeams.add(teamKey);
+        uniqueCandidates.push(cand);
+      }
+    }
+
     // Generate varied blurbs with rotating templates so no two blunders sound identical
-    rawCandidates.forEach((cand, idx) => {
+    uniqueCandidates.forEach((cand, idx) => {
       const generated = generateBlunderPhrasing({
         manager: cand.team.ownerName,
         teamName: cand.team.teamName,
