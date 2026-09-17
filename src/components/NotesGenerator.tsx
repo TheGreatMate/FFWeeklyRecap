@@ -962,7 +962,8 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                         });
                       } catch (e) {
                         console.error('PDF export failed:', e);
-                        alert('Could not export PDF directly.');
+                        const msg = e instanceof Error ? e.message : String(e);
+                        alert(`Could not export PDF directly (${msg}). You can also try "Print" or "Save HTML".`);
                       } finally {
                         setIsExportingPdf(false);
                       }

@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import html2canvas from 'html2canvas-pro';
 
 export interface ExportPdfOptions {
   leagueName?: string;
@@ -74,19 +74,43 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
       });
 
       // Small pause to allow UI update
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => setTimeout(r, 60));
 
-      const canvas = await html2canvas(pageEl, {
-        scale: 2, // 2x high resolution for crisp text & borders
-        useCORS: true,
-        allowTaint: false,
-        imageTimeout: 8000,
-        backgroundColor: isDark ? '#0b0f19' : '#ffffff',
-        logging: false,
-        scrollX: 0,
-        scrollY: 0,
-        windowWidth: 1024,
-      });
+      let canvas: HTMLCanvasElement;
+      try {
+        canvas = await html2canvas(pageEl, {
+          scale: 2, // 2x high resolution for crisp text & borders
+          useCORS: true,
+          allowTaint: false,
+          imageTimeout: 8000,
+          backgroundColor: isDark ? '#0b0f19' : '#ffffff',
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 1024,
+        });
+      } catch (firstErr) {
+        console.warn(`High-fidelity render for page ${pageNum} encountered an issue, trying safe fallback:`, firstErr);
+        // Fallback: render without blocking on problematic images
+        canvas = await html2canvas(pageEl, {
+          scale: 1.5,
+          useCORS: false,
+          allowTaint: false,
+          imageTimeout: 4000,
+          backgroundColor: isDark ? '#0b0f19' : '#ffffff',
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: 1024,
+          ignoreElements: (el) => {
+            if (el.tagName === 'IMG') {
+              const img = el as HTMLImageElement;
+              return !img.complete || img.naturalWidth === 0;
+            }
+            return false;
+          },
+        });
+      }
 
       // Fill background of PDF page to match theme completely
       if (isDark) {
@@ -144,7 +168,22 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
     const modeTag = isDark ? '_Dark' : '_Print';
     const fileName = `${safeLeague}${safeWeek}_Gazette${modeTag}.pdf`;
 
-    pdf.save(fileName);
+    try {
+      pdf.save(fileName);
+    } catch (saveErr) {
+      console.warn('pdf.save failed, triggering manual blob download:', saveErr);
+      const pdfBlob = pdf.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }, 500);
+    }
 
     return true;
   } catch (err) {

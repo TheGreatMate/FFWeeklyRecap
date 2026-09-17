@@ -159,7 +159,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
       });
     } catch (err) {
       console.error('Failed to generate PDF directly:', err);
-      alert('Could not generate PDF directly. You can also try "Print / System PDF" or "Save Standalone HTML".');
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(`Could not generate PDF directly (${msg}). You can also try "Print" or "Save HTML".`);
     } finally {
       setIsExportingPdf(false);
       setPdfProgress('');
