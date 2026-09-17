@@ -308,7 +308,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
       {/* Gazette Document Container (A4 / Letter Print Friendly) */}
       <div
         id="gazette-document"
-        className={`${
+        className={`max-w-[850px] mx-auto ${
           isDarkMode
             ? 'gazette-dark bg-[#0b0f19] text-slate-100 border border-slate-800'
             : 'bg-white text-slate-900'
@@ -320,7 +320,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         <section
           data-gazette-page="1"
           id="gazette-page-1"
-          className={`p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
+          className={`p-6 sm:p-8 min-h-[1056px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
             isDarkMode ? 'border-slate-800' : 'border-slate-200'
           }`}
         >
@@ -811,7 +811,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         <section
           data-gazette-page="2"
           id="gazette-page-2"
-          className={`p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
+          className={`p-6 sm:p-8 min-h-[1056px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
             isDarkMode ? 'border-slate-800' : 'border-slate-200'
           }`}
         >
@@ -1169,7 +1169,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         <section
           data-gazette-page="3"
           id="gazette-page-3"
-          className="p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between print:p-8"
+          className="p-6 sm:p-8 min-h-[1056px] flex flex-col justify-between print:border-none print:p-8"
         >
           <div>
             {/* Header */}

@@ -9,9 +9,18 @@ export interface ExportPdfOptions {
 }
 
 /**
- * Directly exports the 3-Page Weekly Gazette Report as a high-resolution PDF file,
- * retaining the exact dark mode background, custom colors, player avatars, tables,
- * and typography without relying on browser print dialog quirks.
+ * Standard Letter portrait dimensions at 96 DPI:
+ * 8.5 inches * 96 = 816 px width
+ * 11.0 inches * 96 = 1056 px height
+ * Exact Aspect Ratio: 8.5 / 11 = 0.772727
+ */
+const LETTER_WIDTH_PX = 816;
+const LETTER_HEIGHT_PX = 1056;
+
+/**
+ * Directly exports the 3-Page Weekly Gazette Report as a full-bleed, high-resolution PDF file.
+ * Formats every page precisely to US Letter portrait proportions so content fills the entire
+ * page with zero wasted margins, preserving exact dark mode styling and typography.
  */
 export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promise<boolean> {
   const gazetteDoc = document.getElementById('gazette-document');
@@ -38,20 +47,54 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
   options.onProgress?.({
     current: 0,
     total: totalPages,
-    message: 'Preparing Gazette pages for PDF generation...',
+    message: 'Formatting Gazette pages for Letter PDF...',
   });
 
-  // Temporarily ensure high-fidelity layout width if currently on small viewport
-  const originalWidth = gazetteDoc.style.width;
-  const originalMaxWidth = gazetteDoc.style.maxWidth;
-  const wasNarrow = window.innerWidth < 1000;
+  // Preserve original inline styles to restore after export
+  const originalDocStyles = {
+    width: gazetteDoc.style.width,
+    maxWidth: gazetteDoc.style.maxWidth,
+    minWidth: gazetteDoc.style.minWidth,
+    margin: gazetteDoc.style.margin,
+    boxShadow: gazetteDoc.style.boxShadow,
+    borderRadius: gazetteDoc.style.borderRadius,
+    border: gazetteDoc.style.border,
+  };
 
-  if (wasNarrow) {
-    gazetteDoc.style.width = '1000px';
-    gazetteDoc.style.maxWidth = '1000px';
-  }
+  const originalPageStyles = pageElements.map((el) => ({
+    width: el.style.width,
+    maxWidth: el.style.maxWidth,
+    minWidth: el.style.minWidth,
+    height: el.style.height,
+    minHeight: el.style.minHeight,
+    boxSizing: el.style.boxSizing,
+    borderBottom: el.style.borderBottom,
+    padding: el.style.padding,
+  }));
 
   try {
+    // 1. Explicitly constrain gazetteDoc to the standard Letter width and square corners
+    gazetteDoc.style.width = `${LETTER_WIDTH_PX}px`;
+    gazetteDoc.style.maxWidth = `${LETTER_WIDTH_PX}px`;
+    gazetteDoc.style.minWidth = `${LETTER_WIDTH_PX}px`;
+    gazetteDoc.style.margin = '0 auto';
+    gazetteDoc.style.boxShadow = 'none';
+    gazetteDoc.style.borderRadius = '0';
+    gazetteDoc.style.border = 'none';
+
+    // 2. Format each page section to exact Letter dimensions
+    pageElements.forEach((el) => {
+      el.style.width = `${LETTER_WIDTH_PX}px`;
+      el.style.maxWidth = `${LETTER_WIDTH_PX}px`;
+      el.style.minWidth = `${LETTER_WIDTH_PX}px`;
+      el.style.boxSizing = 'border-box';
+      el.style.borderBottom = 'none';
+      el.style.minHeight = `${LETTER_HEIGHT_PX}px`;
+    });
+
+    // Allow DOM reflow so all flex columns and grids calculate at Letter dimensions
+    await new Promise((r) => setTimeout(r, 120));
+
     // Standard Letter in mm: 215.9 x 279.4
     const pdf = new jsPDF({
       orientation: 'portrait',
@@ -60,8 +103,9 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
       compress: true,
     });
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pageWidth = pdf.internal.pageSize.getWidth();   // 215.9 mm
+    const pageHeight = pdf.internal.pageSize.getHeight(); // 279.4 mm
+    const letterRatio = pageWidth / pageHeight;           // 0.772727
 
     for (let i = 0; i < totalPages; i++) {
       const pageEl = pageElements[i];
@@ -76,10 +120,17 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
       // Small pause to allow UI update
       await new Promise((r) => setTimeout(r, 60));
 
+      // Calculate the natural content height (at least 1056px to fill Letter)
+      const measuredHeight = Math.max(LETTER_HEIGHT_PX, pageEl.scrollHeight, pageEl.offsetHeight);
+      pageEl.style.height = `${measuredHeight}px`;
+
       let canvas: HTMLCanvasElement;
       try {
         canvas = await html2canvas(pageEl, {
           scale: 2, // 2x high resolution for crisp text & borders
+          width: LETTER_WIDTH_PX,
+          height: measuredHeight,
+          windowWidth: LETTER_WIDTH_PX,
           useCORS: true,
           allowTaint: false,
           imageTimeout: 8000,
@@ -87,13 +138,15 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
           logging: false,
           scrollX: 0,
           scrollY: 0,
-          windowWidth: 1024,
         });
       } catch (firstErr) {
         console.warn(`High-fidelity render for page ${pageNum} encountered an issue, trying safe fallback:`, firstErr);
         // Fallback: render without blocking on problematic images
         canvas = await html2canvas(pageEl, {
           scale: 1.5,
+          width: LETTER_WIDTH_PX,
+          height: measuredHeight,
+          windowWidth: LETTER_WIDTH_PX,
           useCORS: false,
           allowTaint: false,
           imageTimeout: 4000,
@@ -101,7 +154,6 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
           logging: false,
           scrollX: 0,
           scrollY: 0,
-          windowWidth: 1024,
           ignoreElements: (el) => {
             if (el.tagName === 'IMG') {
               const img = el as HTMLImageElement;
@@ -112,7 +164,7 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
         });
       }
 
-      // Fill background of PDF page to match theme completely
+      // Fill full background of PDF page to match theme completely
       if (isDark) {
         pdf.setFillColor(11, 15, 25); // #0b0f19
       } else {
@@ -120,37 +172,22 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
       }
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const canvasRatio = canvasWidth / canvasHeight;
+      const imgData = canvas.toDataURL('image/jpeg', 0.96);
+      const contentRatio = LETTER_WIDTH_PX / measuredHeight;
 
-      // Usable printable area with 4mm margins
-      const margin = 4;
-      const usableWidth = pageWidth - margin * 2;
-      const usableHeight = pageHeight - margin * 2;
-      const usableRatio = usableWidth / usableHeight;
-
-      let renderWidth = usableWidth;
-      let renderHeight = renderWidth / canvasRatio;
-      let posX = margin;
-      let posY = margin;
-
-      if (canvasRatio > usableRatio) {
-        // Wider than printable area
-        renderWidth = usableWidth;
-        renderHeight = renderWidth / canvasRatio;
-        posX = margin;
-        posY = margin + (usableHeight - renderHeight) / 2;
+      // If content ratio matches Letter within 6%, fill the entire page full-bleed
+      if (Math.abs(contentRatio - letterRatio) <= 0.06) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+      } else if (contentRatio < letterRatio) {
+        // Content is taller than Letter: scale to pageHeight to avoid cutting anything off
+        const renderWidth = pageHeight * contentRatio;
+        const posX = Math.max(0, (pageWidth - renderWidth) / 2);
+        pdf.addImage(imgData, 'JPEG', posX, 0, renderWidth, pageHeight, undefined, 'FAST');
       } else {
-        // Taller than printable area
-        renderHeight = usableHeight;
-        renderWidth = renderHeight * canvasRatio;
-        posX = margin + (usableWidth - renderWidth) / 2;
-        posY = margin;
+        // Content is wider than Letter: scale to pageWidth
+        const renderHeight = pageWidth / contentRatio;
+        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, renderHeight, undefined, 'FAST');
       }
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      pdf.addImage(imgData, 'JPEG', posX, posY, renderWidth, renderHeight, undefined, 'FAST');
 
       if (i < totalPages - 1) {
         pdf.addPage('letter', 'portrait');
@@ -190,10 +227,11 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
     console.error('Error generating PDF:', err);
     throw err;
   } finally {
-    if (wasNarrow) {
-      gazetteDoc.style.width = originalWidth;
-      gazetteDoc.style.maxWidth = originalMaxWidth;
-    }
+    // Restore all original styles
+    Object.assign(gazetteDoc.style, originalDocStyles);
+    pageElements.forEach((el, idx) => {
+      Object.assign(el.style, originalPageStyles[idx]);
+    });
   }
 }
 
