@@ -157,6 +157,72 @@ app.get('/api/sleeper/league/:leagueId', async (req, res) => {
   }
 });
 
+// Convert images to Base64 data URLs server-side to guarantee 100% fidelity in PDF export
+app.post('/api/convert-images-base64', async (req, res) => {
+  try {
+    const { urls } = req.body;
+    if (!Array.isArray(urls)) {
+      return res.status(400).json({ error: 'urls must be an array' });
+    }
+
+    const results: Record<string, string> = {};
+
+    await Promise.all(
+      urls.map(async (url) => {
+        if (!url || typeof url !== 'string') return;
+        if (url.startsWith('data:image/')) {
+          results[url] = url;
+          return;
+        }
+        try {
+          const imgRes = await fetch(url, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept: 'image/*,*/*',
+            },
+          });
+          if (!imgRes.ok) return;
+          const contentType = imgRes.headers.get('content-type') || 'image/png';
+          const buffer = Buffer.from(await imgRes.arrayBuffer());
+          results[url] = `data:${contentType};base64,${buffer.toString('base64')}`;
+        } catch (err) {
+          console.warn('Failed to convert image server-side:', url, err);
+        }
+      })
+    );
+
+    res.json({ dataUrls: results });
+  } catch (err: any) {
+    console.error('Error in /api/convert-images-base64:', err);
+    res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// Proxy single image with universal CORS for canvas rendering
+app.get('/api/proxy-image', async (req, res) => {
+  const imageUrl = req.query.url as string;
+  if (!imageUrl) return res.status(400).send('Missing url parameter');
+  try {
+    const imgRes = await fetch(imageUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'image/*,*/*',
+      },
+    });
+    if (!imgRes.ok) return res.status(imgRes.status).send('Failed to fetch image');
+    const contentType = imgRes.headers.get('content-type') || 'image/png';
+    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).send(err.message || 'Proxy error');
+  }
+});
+
 // Sleeper Player Cache & Resolution Service
 interface CompactPlayer {
   id: string;
