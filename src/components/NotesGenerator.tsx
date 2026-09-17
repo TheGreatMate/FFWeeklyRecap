@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Newspaper,
   Printer,
+  FileDown,
   DollarSign,
   Settings2,
   Key,
@@ -42,6 +43,7 @@ import {
   DEFAULT_SIDE_POT_CONFIG,
 } from '../utils/gazetteCalc';
 import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
+import { exportGazetteToPdf } from '../utils/exportPdf';
 import { WeeklyGazetteReport } from './WeeklyGazetteReport';
 import { WeekSelector } from './WeekSelector';
 
@@ -116,6 +118,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   const [aiError, setAiError] = useState<string | null>(null);
   const [generationSource, setGenerationSource] = useState<'ai' | 'builtin' | null>('builtin');
   const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [customApiKey, setCustomApiKey] = useState<string>(() => {
     try {
       return localStorage.getItem('sleeper_custom_gemini_key') || '';
@@ -948,6 +951,36 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                 <>
                   <button
                     type="button"
+                    id="action-bar-direct-pdf-btn"
+                    onClick={async () => {
+                      if (isExportingPdf) return;
+                      setIsExportingPdf(true);
+                      try {
+                        await exportGazetteToPdf({
+                          leagueName: gazetteData.leagueName,
+                          week: gazetteData.week,
+                        });
+                      } catch (e) {
+                        console.error('PDF export failed:', e);
+                        alert('Could not export PDF directly.');
+                      } finally {
+                        setIsExportingPdf(false);
+                      }
+                    }}
+                    disabled={isExportingPdf}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer disabled:opacity-60"
+                    title="Directly download PDF file retaining the exact dark background and graphics"
+                  >
+                    {isExportingPdf ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    ) : (
+                      <FileDown className="w-3.5 h-3.5 text-amber-300" />
+                    )}
+                    <span>{isExportingPdf ? 'Exporting PDF...' : 'Save PDF'}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     id="action-bar-download-html-btn"
                     onClick={() =>
                       downloadGazetteHTML(
@@ -971,7 +1004,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                     title="Print or Save as PDF"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>Print / PDF</span>
+                    <span>Print</span>
                   </button>
                 </>
               )}

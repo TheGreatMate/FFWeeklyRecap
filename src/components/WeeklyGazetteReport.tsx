@@ -14,11 +14,14 @@ import {
   AlertTriangle,
   Info,
   Download,
+  FileDown,
+  Loader2,
   Moon,
   Sun,
 } from 'lucide-react';
 import { GazetteReportData } from '../types';
 import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
+import { exportGazetteToPdf } from '../utils/exportPdf';
 
 interface WeeklyGazetteReportProps {
   data: GazetteReportData;
@@ -138,6 +141,31 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
     if (onUpdateData) onUpdateData(updatedData);
   };
 
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState<string>('');
+
+  const handleDirectSavePdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    setPdfProgress('Initializing PDF engine...');
+    try {
+      await exportGazetteToPdf({
+        leagueName: localData.leagueName,
+        week: localData.week,
+        isDarkMode,
+        onProgress: (prog) => {
+          setPdfProgress(prog.message);
+        },
+      });
+    } catch (err) {
+      console.error('Failed to generate PDF directly:', err);
+      alert('Could not generate PDF directly. You can also try "Print / System PDF" or "Save Standalone HTML".');
+    } finally {
+      setIsExportingPdf(false);
+      setPdfProgress('');
+    }
+  };
+
   const handlePrint = () => {
     printGazetteElement('gazette-document', isDarkMode);
   };
@@ -159,7 +187,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
           <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-800 text-[11px]">
             Gazette View
           </span>
-          <span>3-Page Executive Weekly League Newspaper (Print & PDF Ready)</span>
+          <span>3-Page Executive Weekly League Newspaper</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -205,6 +233,35 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
             </button>
           )}
 
+          {/* Direct Save to PDF Button (Retains Dark Background and Colors) */}
+          <button
+            type="button"
+            id="gazette-direct-pdf-btn"
+            onClick={handleDirectSavePdf}
+            disabled={isExportingPdf}
+            className={`px-3.5 py-1.5 rounded-lg text-white font-bold text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer ${
+              isExportingPdf
+                ? 'bg-indigo-800 opacity-90 cursor-wait'
+                : isDarkMode
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 ring-1 ring-emerald-400/50'
+                : 'bg-emerald-600 hover:bg-emerald-500'
+            }`}
+            title="Download 3-page PDF directly preserving exact dark background, fonts, and graphics"
+          >
+            {isExportingPdf ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+            ) : (
+              <FileDown className="w-3.5 h-3.5 text-amber-300" />
+            )}
+            <span>
+              {isExportingPdf
+                ? (pdfProgress || 'Saving PDF...')
+                : isDarkMode
+                ? 'Save PDF (Dark Mode)'
+                : 'Save as PDF'}
+            </span>
+          </button>
+
           <button
             type="button"
             id="gazette-download-html-btn"
@@ -213,21 +270,39 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
             title="Download standalone HTML file with pre-formatted print styles"
           >
             <Download className="w-3.5 h-3.5 text-slate-300" />
-            <span>Save Standalone HTML</span>
+            <span>Save HTML</span>
           </button>
 
           <button
             type="button"
             id="gazette-top-print-btn"
             onClick={handlePrint}
-            className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow transition-colors cursor-pointer"
-            title="Open print dialog or save as PDF"
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
+            title="Open system print dialog"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print / Save as PDF</span>
+            <Printer className="w-3.5 h-3.5 text-slate-300" />
+            <span>Print</span>
           </button>
         </div>
       </div>
+
+      {/* Generating PDF progress banner */}
+      {isExportingPdf && (
+        <div className="bg-indigo-950/90 border border-indigo-700 text-indigo-100 text-xs px-4 py-3 rounded-xl flex items-center justify-between shadow-xl print:hidden animate-pulse">
+          <div className="flex items-center gap-2.5">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-300 shrink-0" />
+            <div>
+              <p className="font-bold text-sm text-white">{pdfProgress || 'Generating 3-Page PDF...'}</p>
+              <p className="text-[11px] text-indigo-200">
+                Capturing pages at 2x high resolution with full {isDarkMode ? 'dark background' : 'light'} fidelity.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-mono px-2.5 py-1 bg-indigo-900 border border-indigo-600 rounded text-amber-300 font-bold">
+            {isDarkMode ? 'Midnight Canvas' : 'Print Canvas'}
+          </span>
+        </div>
+      )}
 
       {/* Gazette Document Container (A4 / Letter Print Friendly) */}
       <div
@@ -241,7 +316,13 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         {/* ========================================================
             PAGE 1: THE FRONT PAGE / REST OF WEEK 1 & HEADLINE STORY
             ======================================================== */}
-        <section className="p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed border-slate-200 print:border-none print:break-after-page print:p-8">
+        <section
+          data-gazette-page="1"
+          id="gazette-page-1"
+          className={`p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
+            isDarkMode ? 'border-slate-800' : 'border-slate-200'
+          }`}
+        >
           <div>
             {/* Masthead */}
             <header className={`border-b-2 pb-4 mb-6 ${isDarkMode ? 'border-slate-700' : 'border-slate-900'}`}>
@@ -726,9 +807,13 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         {/* ========================================================
             PAGE 2: THE WEEK LEDGER, POINTS LEADERBOARD & SIDE POT
             ======================================================== */}
-        <section className={`p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
-          isDarkMode ? 'border-slate-800' : 'border-slate-200'
-        }`}>
+        <section
+          data-gazette-page="2"
+          id="gazette-page-2"
+          className={`p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between border-b-4 border-dashed print:border-none print:break-after-page print:p-8 ${
+            isDarkMode ? 'border-slate-800' : 'border-slate-200'
+          }`}
+        >
           <div>
             {/* Header */}
             <div className="mb-6">
@@ -1080,7 +1165,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         {/* ========================================================
             PAGE 3: POWER RANKINGS & THE COMMISSIONER'S NOTEBOOK
             ======================================================== */}
-        <section className="p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between print:p-8">
+        <section
+          data-gazette-page="3"
+          id="gazette-page-3"
+          className="p-8 sm:p-12 min-h-[1050px] flex flex-col justify-between print:p-8"
+        >
           <div>
             {/* Header */}
             <div className="mb-4">

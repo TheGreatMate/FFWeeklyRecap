@@ -243,43 +243,25 @@
     box-shadow: none !important;
     border: none !important;
     border-radius: 0 !important;
-    background-color: #ffffff !important;
-    color: #0f172a !important;
     overflow: visible !important;
     z-index: 99999 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* When printing, always use clean white background & dark text for toner saving and readability */
-  #gazette-document.gazette-dark {
+  #gazette-document:not(.gazette-dark) {
     background-color: #ffffff !important;
     color: #0f172a !important;
+  }
+
+  /* Retain exact rich midnight background and text colors when printing in dark mode */
+  #gazette-document.gazette-dark {
+    background-color: #0b0f19 !important;
+    color: #f8fafc !important;
     border: none !important;
     box-shadow: none !important;
-  }
-
-  #gazette-document.gazette-dark h1,
-  #gazette-document.gazette-dark h2,
-  #gazette-document.gazette-dark h3,
-  #gazette-document.gazette-dark h4,
-  #gazette-document.gazette-dark h5,
-  #gazette-document.gazette-dark h6,
-  #gazette-document.gazette-dark .text-slate-950,
-  #gazette-document.gazette-dark .text-slate-900,
-  #gazette-document.gazette-dark .text-slate-800 {
-    color: #0f172a !important;
-  }
-
-  #gazette-document.gazette-dark .text-slate-700,
-  #gazette-document.gazette-dark .text-slate-600 {
-    color: #334155 !important;
-  }
-
-  #gazette-document.gazette-dark .bg-slate-50,
-  #gazette-document.gazette-dark .bg-slate-50\/60,
-  #gazette-document.gazette-dark .bg-slate-50\/70,
-  #gazette-document.gazette-dark .bg-slate-100 {
-    background-color: #f8fafc !important;
-    border-color: #e2e8f0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Completely remove any interactive buttons or chrome */

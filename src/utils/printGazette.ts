@@ -66,8 +66,8 @@ export function printGazetteElement(elementId: string = 'gazette-document', isDa
     html, body {
       margin: 0 !important;
       padding: 0 !important;
-      background-color: #ffffff !important;
-      color: #0f172a !important;
+      background-color: ${dark ? '#0b0f19' : '#ffffff'} !important;
+      color: ${dark ? '#f8fafc' : '#0f172a'} !important;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -89,18 +89,15 @@ export function printGazetteElement(elementId: string = 'gazette-document', isDa
       padding: 0 !important;
       box-shadow: none !important;
       border: none !important;
-      background-color: #ffffff !important;
-      color: #0f172a !important;
-    }
-    /* Ensure dark text on printed output for legibility and toner savings */
-    #gazette-document.gazette-dark {
-      background-color: #ffffff !important;
-      color: #0f172a !important;
+      background-color: ${dark ? '#0b0f19' : '#ffffff'} !important;
+      color: ${dark ? '#f8fafc' : '#0f172a'} !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
   </style>
 </head>
-<body class="bg-white text-slate-900">
-  <div id="gazette-document" class="bg-white text-slate-900 font-sans">
+<body class="${dark ? 'bg-[#0b0f19] text-slate-100' : 'bg-white text-slate-900'}">
+  <div id="gazette-document" class="${dark ? 'gazette-dark bg-[#0b0f19] text-slate-100' : 'bg-white text-slate-900'} font-sans">
     ${elem.innerHTML}
   </div>
 </body>
