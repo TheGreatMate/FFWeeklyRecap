@@ -67,25 +67,42 @@ function rasterizeDataUrlSvg(svgDataUrl: string, targetWidth: number, targetHeig
  * Pre-processes all <img> elements within the container to convert their real profile photos
  * into local Base64 data URLs via the backend server proxy.
  * This guarantees 100% preservation of actual manager profile photos without any CORS blocks,
- * tainted canvases, or synthetic monograms.
+ * tainted canvases, or missing photos.
  * Returns a restore function that resets all image tags to their original source attributes.
  */
 async function inlineAllImagesForExport(container: HTMLElement): Promise<() => void> {
   const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
-  const originalSources: { el: HTMLImageElement; src: string }[] = [];
+  const originalAttributes: { el: HTMLImageElement; src: string; crossOrigin: string | null }[] = [];
 
   images.forEach((el) => {
-    originalSources.push({ el, src: el.src });
+    originalAttributes.push({
+      el,
+      src: el.getAttribute('src') || el.src,
+      crossOrigin: el.getAttribute('crossorigin'),
+    });
   });
 
   // Collect unique remote URLs
-  const remoteUrls = Array.from(
-    new Set(
-      images
-        .map((img) => img.src)
-        .filter((src) => src && (src.startsWith('http://') || src.startsWith('https://')))
-    )
-  );
+  const remoteUrls: string[] = [];
+  images.forEach((img) => {
+    const rawSrc = img.src || img.getAttribute('src') || '';
+    if (!rawSrc || rawSrc.startsWith('data:image/')) return;
+
+    let targetUrl = rawSrc;
+    if (rawSrc.includes('/api/proxy-image?url=')) {
+      try {
+        const parsed = new URL(rawSrc, window.location.origin);
+        const underlying = parsed.searchParams.get('url');
+        if (underlying) targetUrl = underlying;
+      } catch {
+        // keep rawSrc
+      }
+    }
+
+    if (!remoteUrls.includes(targetUrl)) {
+      remoteUrls.push(targetUrl);
+    }
+  });
 
   let urlToDataUrlMap: Record<string, string> = {};
 
@@ -111,17 +128,28 @@ async function inlineAllImagesForExport(container: HTMLElement): Promise<() => v
   // Step 2: Apply the real profile image data URLs to all matching <img> elements
   await Promise.all(
     images.map(async (img) => {
-      const originalSrc = img.src;
-      if (!originalSrc || originalSrc.startsWith('data:image/')) {
+      const rawSrc = img.src || img.getAttribute('src') || '';
+      if (!rawSrc || rawSrc.startsWith('data:image/')) {
         return;
       }
 
-      let dataUrl = urlToDataUrlMap[originalSrc];
+      let lookupUrl = rawSrc;
+      if (rawSrc.includes('/api/proxy-image?url=')) {
+        try {
+          const parsed = new URL(rawSrc, window.location.origin);
+          const underlying = parsed.searchParams.get('url');
+          if (underlying) lookupUrl = underlying;
+        } catch {
+          // keep rawSrc
+        }
+      }
+
+      let dataUrl = urlToDataUrlMap[lookupUrl] || urlToDataUrlMap[rawSrc];
 
       // If batch didn't return it, try proxy endpoint
       if (!dataUrl) {
         try {
-          const proxyRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(originalSrc)}`);
+          const proxyRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(lookupUrl)}`);
           if (proxyRes.ok) {
             const blob = await proxyRes.blob();
             dataUrl = await blobToDataUrl(blob);
@@ -131,8 +159,8 @@ async function inlineAllImagesForExport(container: HTMLElement): Promise<() => v
         }
       }
 
-      // If SVG (e.g. Dicebear fallback), rasterize to PNG
-      if (dataUrl && (dataUrl.includes('image/svg+xml') || originalSrc.toLowerCase().includes('.svg'))) {
+      // If SVG (e.g. monogram), rasterize to PNG
+      if (dataUrl && (dataUrl.includes('image/svg+xml') || lookupUrl.toLowerCase().includes('.svg'))) {
         try {
           dataUrl = await rasterizeDataUrlSvg(dataUrl, img.width || 48, img.height || 48);
         } catch {
@@ -140,19 +168,42 @@ async function inlineAllImagesForExport(container: HTMLElement): Promise<() => v
         }
       }
 
-      // If we received a valid data URL, assign it so html2canvas renders the real photo directly
+      // If we received a valid data URL, assign it and remove crossorigin attributes
       if (dataUrl && dataUrl.startsWith('data:image/')) {
+        img.removeAttribute('crossorigin');
+        img.removeAttribute('referrerpolicy');
         img.src = dataUrl;
       }
     })
   );
 
-  // Give DOM a micro-tick to render updated image sources
-  await new Promise((r) => setTimeout(r, 80));
+  // Wait for all images to decode properly in DOM
+  await Promise.all(
+    images.map((img) => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        const done = () => {
+          img.removeEventListener('load', done);
+          img.removeEventListener('error', done);
+          resolve();
+        };
+        img.addEventListener('load', done);
+        img.addEventListener('error', done);
+        setTimeout(done, 800);
+      });
+    })
+  );
+
+  await new Promise((r) => setTimeout(r, 120));
 
   return () => {
-    originalSources.forEach(({ el, src }) => {
+    originalAttributes.forEach(({ el, src, crossOrigin }) => {
       el.src = src;
+      if (crossOrigin !== null) {
+        el.setAttribute('crossorigin', crossOrigin);
+      } else {
+        el.removeAttribute('crossorigin');
+      }
     });
   };
 }
@@ -275,8 +326,8 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
           height: measuredHeight,
           windowWidth: LETTER_WIDTH_PX,
           useCORS: true,
-          allowTaint: true, // safe because all images are inlined as local data URLs
-          imageTimeout: 10000,
+          allowTaint: false,
+          imageTimeout: 12000,
           backgroundColor: isDark ? '#0b0f19' : '#ffffff',
           logging: false,
           scrollX: 0,
@@ -290,8 +341,8 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
           height: measuredHeight,
           windowWidth: LETTER_WIDTH_PX,
           useCORS: true,
-          allowTaint: true,
-          imageTimeout: 8000,
+          allowTaint: false,
+          imageTimeout: 10000,
           backgroundColor: isDark ? '#0b0f19' : '#ffffff',
           logging: false,
           scrollX: 0,
@@ -308,18 +359,9 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
-      const contentRatio = LETTER_WIDTH_PX / measuredHeight;
 
-      if (Math.abs(contentRatio - letterRatio) <= 0.06) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-      } else if (contentRatio < letterRatio) {
-        const renderWidth = pageHeight * contentRatio;
-        const posX = Math.max(0, (pageWidth - renderWidth) / 2);
-        pdf.addImage(imgData, 'JPEG', posX, 0, renderWidth, pageHeight, undefined, 'FAST');
-      } else {
-        const renderHeight = pageWidth / contentRatio;
-        pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, renderHeight, undefined, 'FAST');
-      }
+      // Always fill the entire Letter page edge-to-edge
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
 
       if (i < totalPages - 1) {
         pdf.addPage('letter', 'portrait');

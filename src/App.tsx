@@ -152,7 +152,8 @@ export default function App() {
       if (leagueId === DEMO_CHOPPED_LEAGUE.league_id) {
         setLeagueFormat('chopped');
         const demoMatchups = week === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
-        const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP);
+        const prior = week === 2 ? { 1: DEMO_CHOPPED_MATCHUPS_WEEK_1 } : undefined;
+        const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, demoMatchups, week, SLEEPER_PLAYERS_MAP, prior);
         setChoppedStats(cStats);
         setWeekStats(null);
         if (week === 1) setChoppedWeek1Stats(cStats);
@@ -179,6 +180,7 @@ export default function App() {
       let rosters: SleeperRoster[] = [];
       let users: SleeperLeagueUser[] = [];
       let matchups: SleeperMatchupItem[] = [];
+      let priorMatchups: Record<number, SleeperMatchupItem[]> = {};
       let currentPlayers: Record<string, CompactPlayer> = { ...SLEEPER_PLAYERS_MAP, ...playersMap };
 
       if (res.ok) {
@@ -186,6 +188,7 @@ export default function App() {
         rosters = data.rosters || [];
         users = data.users || [];
         matchups = data.matchups || [];
+        priorMatchups = data.priorMatchups || {};
         if (data.players) {
           // Merge incoming players without overwriting valid names with generic placeholders
           for (const [pId, pObj] of Object.entries(data.players as Record<string, CompactPlayer>)) {
@@ -199,15 +202,31 @@ export default function App() {
         }
       } else {
         // Fallback to direct parallel calls
-        const [rostersRes, usersRes, matchupsRes] = await Promise.all([
+        const fallbackTasks: Promise<any>[] = [
           fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
           fetch(`https://api.sleeper.app/v1/league/${leagueId}/users`),
           fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`),
-        ]);
+        ];
 
-        rosters = rostersRes.ok ? await rostersRes.json() : [];
-        users = usersRes.ok ? await usersRes.json() : [];
-        matchups = matchupsRes.ok ? await matchupsRes.json() : [];
+        // Also fetch prior weeks if week > 1
+        if (week > 1) {
+          for (let w = 1; w < week; w++) {
+            fallbackTasks.push(
+              fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${w}`)
+                .then((r) => (r.ok ? r.json() : []))
+                .then((m) => {
+                  priorMatchups[w] = m;
+                })
+                .catch(() => {})
+            );
+          }
+        }
+
+        const [rostersRes, usersRes, matchupsRes] = await Promise.all(fallbackTasks);
+
+        rosters = rostersRes && rostersRes.ok ? await rostersRes.json() : [];
+        users = usersRes && usersRes.ok ? await usersRes.json() : [];
+        matchups = matchupsRes && matchupsRes.ok ? await matchupsRes.json() : [];
       }
 
       // Check for any unmapped numeric player IDs in starters
@@ -257,7 +276,7 @@ export default function App() {
       }
 
       if (detectedFormat === 'chopped') {
-        const cStats = calculateChoppedStats(rosters, users, matchups, week, currentPlayers);
+        const cStats = calculateChoppedStats(rosters, users, matchups, week, currentPlayers, priorMatchups);
         setChoppedStats(cStats);
         setWeekStats(null);
         if (week === 1) setChoppedWeek1Stats(cStats);
@@ -447,7 +466,7 @@ export default function App() {
                   if (d2 && d2.matchups && d2.matchups.length > 0) {
                     const fmt = detectLeagueFormat(selectedLeague, d2.matchups);
                     if (fmt === 'chopped') {
-                      setChoppedWeek2Stats(calculateChoppedStats(d2.rosters, d2.users, d2.matchups, 2, playersMap));
+                      setChoppedWeek2Stats(calculateChoppedStats(d2.rosters, d2.users, d2.matchups, 2, playersMap, d2.priorMatchups));
                     } else {
                       setWeek2Stats(calculateWeekStats(d2.rosters, d2.users, d2.matchups, 2, playersMap));
                     }
@@ -500,14 +519,13 @@ export default function App() {
     setLeagueFormat('chopped');
     setUserError(null);
     setMatchupError(null);
-    const matchups = weekToLoad === 2 ? DEMO_CHOPPED_MATCHUPS_WEEK_2 : DEMO_CHOPPED_MATCHUPS_WEEK_1;
-    const cStats = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, matchups, weekToLoad, SLEEPER_PLAYERS_MAP);
+    const c1 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
+    const c2 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_2, 2, SLEEPER_PLAYERS_MAP, { 1: DEMO_CHOPPED_MATCHUPS_WEEK_1 });
+    const cStats = weekToLoad === 2 ? c2 : c1;
     setChoppedStats(cStats);
     setWeekStats(null);
 
     // Populate both weeks 1 & 2 for instantaneous dual comparison
-    const c1 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_1, 1, SLEEPER_PLAYERS_MAP);
-    const c2 = calculateChoppedStats(DEMO_ROSTERS, DEMO_USERS, DEMO_CHOPPED_MATCHUPS_WEEK_2, 2, SLEEPER_PLAYERS_MAP);
     setChoppedWeek1Stats(c1);
     setChoppedWeek2Stats(c2);
   };

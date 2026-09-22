@@ -205,6 +205,37 @@ export const ChoppedBanner: React.FC<ChoppedBannerProps> = ({ stats, leagueName 
         ) : null}
       </div>
 
+      {/* Prior Eliminations Strip */}
+      {stats.previouslyEliminated && stats.previouslyEliminated.length > 0 && (
+        <div className="rounded-xl bg-slate-950/80 border border-slate-800/80 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap text-xs">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded bg-slate-800 text-slate-400">
+              <Skull className="w-3.5 h-3.5" />
+            </span>
+            <span className="font-bold text-slate-300">Hall of the Fallen (Prior Eliminations):</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {stats.previouslyEliminated.map((pe) => (
+              <span
+                key={pe.rosterId}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400"
+              >
+                <img
+                  src={pe.avatarUrl}
+                  alt={pe.teamName}
+                  className="w-4 h-4 rounded-full object-cover grayscale"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span className="font-semibold text-slate-300">{pe.ownerName}</span>
+                <span className="text-[10px] text-rose-400 font-mono">Out in Week {pe.week}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
@@ -213,9 +244,13 @@ export const ChoppedBanner: React.FC<ChoppedBannerProps> = ({ stats, leagueName 
             <span>Surviving Roster Count</span>
           </span>
           <p className="text-lg font-bold text-white mt-1">
-            {totalTeams > 1 ? totalTeams - 1 : totalTeams} / {totalTeams} Left
+            {stats.activeTeams ? stats.activeTeams.length - 1 : (totalTeams > 1 ? totalTeams - 1 : totalTeams)} / {totalTeams} Left
           </p>
-          <p className="text-[10px] text-slate-500">1 manager chopped this week</p>
+          <p className="text-[10px] text-slate-500">
+            {stats.previouslyEliminated && stats.previouslyEliminated.length > 0
+              ? `${stats.previouslyEliminated.length} prior out • 1 chopped this week`
+              : '1 manager chopped this week'}
+          </p>
         </div>
 
         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">

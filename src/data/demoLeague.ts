@@ -2726,7 +2726,22 @@ export const DEMO_CHOPPED_MATCHUPS_WEEK_1: SleeperMatchupItem[] = DEMO_MATCHUPS_
   matchup_id: 0,
 }));
 
-export const DEMO_CHOPPED_MATCHUPS_WEEK_2: SleeperMatchupItem[] = DEMO_MATCHUPS_WEEK_2.map((m) => ({
-  ...m,
-  matchup_id: 0,
-}));
+export const DEMO_CHOPPED_MATCHUPS_WEEK_2: SleeperMatchupItem[] = DEMO_MATCHUPS_WEEK_2.map((m) => {
+  // Roster 4 (Tjhoeschen6) was eliminated in Week 1, so in Week 2 their roster is empty/zeroed out
+  if (m.roster_id === 4) {
+    return {
+      ...m,
+      matchup_id: 0,
+      points: 0,
+      custom_points: null,
+      starters: [],
+      starters_points: [],
+      players: [],
+      players_points: {},
+    };
+  }
+  return {
+    ...m,
+    matchup_id: 0,
+  };
+});

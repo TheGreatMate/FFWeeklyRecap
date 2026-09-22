@@ -29,27 +29,34 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
             No weekly matchups — the lowest scorer is chopped and eliminated from the league
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs flex-wrap">
           <span className="px-2.5 py-1 rounded-md bg-emerald-950/60 text-emerald-300 border border-emerald-800 font-semibold">
-            {allRankedTeams.length - 1} Survivors
+            {(stats.activeTeams ? stats.activeTeams.length - 1 : (allRankedTeams.filter((t) => !t.isEliminated).length - 1))} Survivors
           </span>
           <span className="px-2.5 py-1 rounded-md bg-rose-950/60 text-rose-300 border border-rose-800 font-semibold">
-            1 Chopped
+            1 Chopped (W{week})
           </span>
+          {(stats.previouslyEliminated && stats.previouslyEliminated.length > 0) && (
+            <span className="px-2.5 py-1 rounded-md bg-slate-900 text-slate-400 border border-slate-700 font-semibold">
+              {stats.previouslyEliminated.length} Previously Eliminated
+            </span>
+          )}
         </div>
       </div>
 
       <div className="space-y-2.5">
         {allRankedTeams.map((team, index) => {
-          const rank = index + 1;
+          const isPriorEliminated = Boolean(team.isEliminated);
           const isChopped = team.rosterId === choppedTeam?.rosterId;
-          const isApex = team.rosterId === apexSurvivor?.rosterId;
-          const isNarrow = team.rosterId === narrowEscape?.team.rosterId;
+          const isApex = !isPriorEliminated && team.rosterId === apexSurvivor?.rosterId;
+          const isNarrow = !isPriorEliminated && team.rosterId === narrowEscape?.team.rosterId;
           const isDanger =
             !isChopped &&
+            !isPriorEliminated &&
             stats.dangerZone.some((t) => t.rosterId === team.rosterId);
           const isExpanded = expandedRosterId === team.rosterId;
           const cushionOverCut = Number((team.points - cutLinePoints).toFixed(2));
+          const rank = isPriorEliminated ? '—' : index + 1;
 
           return (
             <div
@@ -58,6 +65,8 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
               className={`rounded-xl border transition-all ${
                 isChopped
                   ? 'bg-gradient-to-r from-rose-950/70 to-slate-950 border-rose-600/60 ring-1 ring-rose-500/20 shadow-lg'
+                  : isPriorEliminated
+                  ? 'bg-slate-950/40 border-slate-900 opacity-60'
                   : isApex
                   ? 'bg-gradient-to-r from-emerald-950/50 to-slate-950 border-emerald-500/50'
                   : isNarrow
@@ -74,6 +83,8 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                     className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs font-mono shrink-0 ${
                       isChopped
                         ? 'bg-rose-600 text-white shadow-md'
+                        : isPriorEliminated
+                        ? 'bg-slate-900 text-slate-500 border border-slate-800'
                         : isApex
                         ? 'bg-emerald-600 text-white shadow-md'
                         : isNarrow || isDanger
@@ -83,6 +94,8 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                   >
                     {isChopped ? (
                       <Skull className="w-4 h-4" />
+                    ) : isPriorEliminated ? (
+                      <Skull className="w-3.5 h-3.5 text-slate-500" />
                     ) : isApex ? (
                       <Crown className="w-4 h-4" />
                     ) : (
@@ -93,18 +106,22 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                   <img
                     src={team.avatarUrl}
                     alt={team.teamName}
-                    className="w-9 h-9 rounded-lg object-cover border border-slate-700 shrink-0"
+                    className={`w-9 h-9 rounded-lg object-cover border shrink-0 ${
+                      isPriorEliminated ? 'border-slate-800 grayscale' : 'border-slate-700'
+                    }`}
                     onError={(e) => {
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h4
                         className={`font-bold text-sm truncate ${
                           isChopped
                             ? 'text-rose-200 line-through'
+                            : isPriorEliminated
+                            ? 'text-slate-500 line-through'
                             : isApex
                             ? 'text-white'
                             : 'text-slate-200'
@@ -116,7 +133,12 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                       {/* Status Badges */}
                       {isChopped && (
                         <span className="px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black uppercase tracking-wider">
-                          🪓 Chopped
+                          🪓 Chopped (Week {week})
+                        </span>
+                      )}
+                      {isPriorEliminated && (
+                        <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 text-[10px] font-bold">
+                          💀 Out in W{team.eliminatedWeek || 1}
                         </span>
                       )}
                       {isApex && (
@@ -144,6 +166,8 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                       className={`text-lg font-black font-mono tracking-tight ${
                         isChopped
                           ? 'text-rose-400'
+                          : isPriorEliminated
+                          ? 'text-slate-500'
                           : isApex
                           ? 'text-emerald-400'
                           : 'text-white'
@@ -156,6 +180,8 @@ export const ChoppedLeaderboard: React.FC<ChoppedLeaderboardProps> = ({ stats })
                     <p className="text-[10px] text-slate-500 font-mono">
                       {isChopped ? (
                         <span className="text-rose-400 font-semibold">ELIMINATED</span>
+                      ) : isPriorEliminated ? (
+                        <span className="text-slate-500 font-semibold">Week {team.eliminatedWeek || 1} victim</span>
                       ) : (
                         <span className="text-emerald-400 font-semibold">
                           +{cushionOverCut} above cut

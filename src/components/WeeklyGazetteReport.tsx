@@ -22,6 +22,25 @@ import {
 import { GazetteReportData } from '../types';
 import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
 import { exportGazetteToPdf } from '../utils/exportPdf';
+import { generateMonogramDataUrl } from '../utils/calc';
+
+/**
+ * Ensures an avatar URL is proxied through our same-origin backend proxy
+ * so that html2canvas can draw it without CORS issues or canvas tainting.
+ * If no avatar exists, returns an inline SVG monogram data URL.
+ */
+function getSafeAvatarUrl(url?: string, name?: string): string {
+  if (url && typeof url === 'string' && url.trim()) {
+    const trimmed = url.trim();
+    if (trimmed.startsWith('data:image/')) return trimmed;
+    if (trimmed.startsWith('/api/proxy-image')) return trimmed;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return `/api/proxy-image?url=${encodeURIComponent(trimmed)}`;
+    }
+    return trimmed;
+  }
+  return generateMonogramDataUrl(name || 'Team');
+}
 
 interface WeeklyGazetteReportProps {
   data: GazetteReportData;
@@ -143,10 +162,12 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
 
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pdfProgress, setPdfProgress] = useState<string>('');
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleDirectSavePdf = async () => {
     if (isExportingPdf) return;
     setIsExportingPdf(true);
+    setExportError(null);
     setPdfProgress('Initializing PDF engine...');
     try {
       await exportGazetteToPdf({
@@ -160,7 +181,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
     } catch (err) {
       console.error('Failed to generate PDF directly:', err);
       const msg = err instanceof Error ? err.message : String(err);
-      alert(`Could not generate PDF directly (${msg}). You can also try "Print" or "Save HTML".`);
+      setExportError(msg);
     } finally {
       setIsExportingPdf(false);
       setPdfProgress('');
@@ -305,6 +326,26 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
         </div>
       )}
 
+      {/* Export Error Banner */}
+      {exportError && (
+        <div className="bg-rose-950/90 border border-rose-700 text-rose-100 text-xs px-4 py-3 rounded-xl flex items-center justify-between shadow-xl print:hidden">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0" />
+            <div>
+              <p className="font-bold text-sm text-white">Could not generate PDF directly</p>
+              <p className="text-[11px] text-rose-200">{exportError}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setExportError(null)}
+            className="text-xs bg-rose-900 hover:bg-rose-800 text-white px-2.5 py-1 rounded cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Gazette Document Container (A4 / Letter Print Friendly) */}
       <div
         id="gazette-document"
@@ -394,13 +435,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <div className="flex flex-col items-center z-10 max-w-[68px]">
                           <div className="relative">
                             <img
-                              src={
-                                localData.blowoutOfTheWeek.winnerAvatarUrl ||
-                                `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.blowoutOfTheWeek.winner)}`
-                              }
+                              src={getSafeAvatarUrl(localData.blowoutOfTheWeek.winnerAvatarUrl, localData.blowoutOfTheWeek.winner)}
                               alt={localData.blowoutOfTheWeek.winner}
-                              crossOrigin="anonymous"
-                              referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-md bg-white"
                             />
                             {!localData.isUpcoming && (
@@ -428,13 +464,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <div className="flex flex-col items-center z-10 max-w-[68px]">
                           <div className="relative">
                             <img
-                              src={
-                                localData.blowoutOfTheWeek.loserAvatarUrl ||
-                                `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.blowoutOfTheWeek.loser)}`
-                              }
+                              src={getSafeAvatarUrl(localData.blowoutOfTheWeek.loserAvatarUrl, localData.blowoutOfTheWeek.loser)}
                               alt={localData.blowoutOfTheWeek.loser}
-                              crossOrigin="anonymous"
-                              referrerPolicy="no-referrer"
                               className={`w-10 h-10 rounded-full object-cover border-2 ${
                                 localData.isUpcoming ? 'border-indigo-400' : 'border-rose-500/80 grayscale contrast-125'
                               } shadow-md bg-white`}
@@ -483,13 +514,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <div className="flex items-center gap-2.5 z-10 w-full px-1">
                           <div className="relative shrink-0">
                             <img
-                              src={
-                                localData.gmOfTheWeek.avatarUrl ||
-                                `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.gmOfTheWeek.manager)}`
-                              }
+                              src={getSafeAvatarUrl(localData.gmOfTheWeek.avatarUrl, localData.gmOfTheWeek.manager)}
                               alt={localData.gmOfTheWeek.manager}
-                              crossOrigin="anonymous"
-                              referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-amber-500 shadow-md bg-white"
                             />
                             <div className="absolute -bottom-1 -right-1 bg-amber-500 text-slate-950 p-0.5 rounded-full shadow">
@@ -537,13 +563,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <div className="flex items-center gap-2.5 z-10 w-full px-1">
                           <div className="relative shrink-0">
                             <img
-                              src={
-                                localData.galaxyBrainMove.avatarUrl ||
-                                `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(localData.galaxyBrainMove.manager)}`
-                              }
+                              src={getSafeAvatarUrl(localData.galaxyBrainMove.avatarUrl, localData.galaxyBrainMove.manager)}
                               alt={localData.galaxyBrainMove.manager}
-                              crossOrigin="anonymous"
-                              referrerPolicy="no-referrer"
                               className="w-10 h-10 rounded-full object-cover border-2 border-indigo-400 shadow-md bg-white"
                             />
                             <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white p-0.5 rounded-full shadow">
@@ -585,11 +606,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     <span className="col-span-2 text-center">Record</span>
                     <span className="col-span-3 text-right">Points</span>
                   </div>
-                  {localData.pointsLeaderboard.slice(0, 12).map((team) => (
+                  {localData.pointsLeaderboard.slice(0, 12).map((team, idx) => (
                     <div
-                      key={team.rank}
+                      key={team.manager || idx}
                       className={`grid grid-cols-12 px-2 py-1 items-center transition-colors ${
-                        team.rank % 2 === 0
+                        idx % 2 === 0
                           ? isDarkMode ? 'bg-[#111827] text-slate-100' : 'bg-slate-50/80 text-slate-900'
                           : isDarkMode ? 'bg-[#0b0f19] text-slate-100' : 'bg-white text-slate-900'
                       }`}
@@ -598,10 +619,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                       <div className="col-span-5 flex items-center gap-1.5 min-w-0 pr-1">
                         {team.avatarUrl && (
                           <img
-                            src={team.avatarUrl}
+                            src={getSafeAvatarUrl(team.avatarUrl, team.manager)}
                             alt={team.manager}
-                            crossOrigin="anonymous"
-                            referrerPolicy="no-referrer"
                             className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                           />
                         )}
@@ -662,10 +681,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     {localData.leadPhoto.primaryAvatarUrl && (
                       <div className="relative">
                         <img
-                          src={localData.leadPhoto.primaryAvatarUrl}
+                          src={getSafeAvatarUrl(localData.leadPhoto.primaryAvatarUrl, localData.leadPhoto.primaryName)}
                           alt={localData.leadPhoto.primaryName || 'Featured Team'}
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
                           className="w-14 h-14 rounded-full object-cover border-2 border-slate-900 shadow bg-white"
                         />
                         <span className="absolute -bottom-1 -right-1 bg-slate-900 text-white text-[8px] font-black px-1 rounded uppercase">
@@ -678,10 +695,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         <span className={`text-xs font-black ${isDarkMode ? 'text-slate-400' : 'text-slate-400'}`}>VS</span>
                         <div className="relative">
                           <img
-                            src={localData.leadPhoto.opponentAvatarUrl}
+                            src={getSafeAvatarUrl(localData.leadPhoto.opponentAvatarUrl, localData.leadPhoto.opponentName)}
                             alt={localData.leadPhoto.opponentName || 'Opponent'}
-                            crossOrigin="anonymous"
-                            referrerPolicy="no-referrer"
                             className="w-12 h-12 rounded-full object-cover border border-slate-400 shadow bg-white"
                           />
                         </div>
@@ -765,10 +780,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     {localData.unluckyBastard.avatarUrl && (
                       <div className="relative shrink-0 mt-0.5">
                         <img
-                          src={localData.unluckyBastard.avatarUrl}
+                          src={getSafeAvatarUrl(localData.unluckyBastard.avatarUrl, localData.unluckyBastard.manager)}
                           alt={localData.unluckyBastard.manager}
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
                           className="w-10 h-10 rounded-full object-cover border-2 border-rose-400 shadow-sm bg-white"
                         />
                         <span className="absolute -bottom-1 -right-1 bg-rose-600 text-white text-[8px] font-black px-1 rounded-full">
@@ -862,10 +875,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     <div className="col-span-2 flex items-center gap-1.5 min-w-0 pr-1">
                       {m.winnerAvatarUrl && (
                         <img
-                          src={m.winnerAvatarUrl}
+                          src={getSafeAvatarUrl(m.winnerAvatarUrl, m.winner)}
                           alt={m.winner}
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-500 bg-white"
                         />
                       )}
@@ -877,10 +888,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     <div className="col-span-2 flex items-center gap-1.5 min-w-0 pr-1">
                       {m.loserAvatarUrl && (
                         <img
-                          src={m.loserAvatarUrl}
+                          src={getSafeAvatarUrl(m.loserAvatarUrl, m.loser)}
                           alt={m.loser}
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                         />
                       )}
@@ -910,11 +919,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                   <span className="col-span-2 text-right">REC</span>
                 </div>
                 <div className={`divide-y text-xs ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                  {localData.pointsLeaderboard.map((team) => (
+                  {localData.pointsLeaderboard.map((team, idx) => (
                     <div
-                      key={team.rank}
+                      key={team.manager || idx}
                       className={`grid grid-cols-12 px-3 py-1.5 items-center transition-colors ${
-                        team.rank % 2 === 0
+                        idx % 2 === 0
                           ? isDarkMode ? 'bg-[#111827]' : 'bg-slate-50'
                           : isDarkMode ? 'bg-[#0b0f19]' : 'bg-white'
                       }`}
@@ -923,10 +932,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                       <div className="col-span-6 flex items-center gap-1.5 min-w-0 pr-1">
                         {team.avatarUrl && (
                           <img
-                            src={team.avatarUrl}
+                            src={getSafeAvatarUrl(team.avatarUrl, team.manager)}
                             alt={team.manager}
-                            crossOrigin="anonymous"
-                            referrerPolicy="no-referrer"
                             className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                           />
                         )}
@@ -971,10 +978,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                   <div className="p-3 flex items-center gap-2.5">
                     {!localData.isUpcoming && localData.sidePotDesk.pointsWinnerAvatarUrl && (
                       <img
-                        src={localData.sidePotDesk.pointsWinnerAvatarUrl}
+                        src={getSafeAvatarUrl(localData.sidePotDesk.pointsWinnerAvatarUrl, localData.sidePotDesk.pointsWinnerName)}
                         alt={localData.sidePotDesk.pointsWinnerName}
-                        crossOrigin="anonymous"
-                        referrerPolicy="no-referrer"
                         className="w-9 h-9 rounded-full object-cover border-2 border-amber-500 shadow-sm shrink-0 bg-white"
                       />
                     )}
@@ -994,10 +999,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                   <div className="p-3 flex items-center gap-2.5">
                     {!localData.isUpcoming && localData.sidePotDesk.blowoutWinnerAvatarUrl && (
                       <img
-                        src={localData.sidePotDesk.blowoutWinnerAvatarUrl}
+                        src={getSafeAvatarUrl(localData.sidePotDesk.blowoutWinnerAvatarUrl, localData.sidePotDesk.blowoutWinnerName)}
                         alt={localData.sidePotDesk.blowoutWinnerName}
-                        crossOrigin="anonymous"
-                        referrerPolicy="no-referrer"
                         className="w-9 h-9 rounded-full object-cover border-2 border-red-500 shadow-sm shrink-0 bg-white"
                       />
                     )}
@@ -1068,10 +1071,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                             <div className="flex items-center gap-2">
                               {b.avatarUrl && (
                                 <img
-                                  src={b.avatarUrl}
+                                  src={getSafeAvatarUrl(b.avatarUrl, b.manager)}
                                   alt={b.manager}
-                                  crossOrigin="anonymous"
-                                  referrerPolicy="no-referrer"
                                   className="w-5 h-5 rounded-full object-cover border border-amber-400 shrink-0 bg-white"
                                 />
                               )}
@@ -1204,11 +1205,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                 <span className="col-span-8">Assessment / Evidence</span>
               </div>
               <div className={`divide-y text-xs ${isDarkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                {localData.powerRankings.map((p) => (
+                {localData.powerRankings.map((p, idx) => (
                   <div
-                    key={p.rank}
+                    key={p.manager || idx}
                     className={`grid grid-cols-12 px-3 py-1.5 items-center transition-colors ${
-                      p.rank % 2 === 0
+                      idx % 2 === 0
                         ? isDarkMode ? 'bg-[#111827]' : 'bg-slate-50'
                         : isDarkMode ? 'bg-[#0b0f19]' : 'bg-white'
                     }`}
@@ -1217,10 +1218,8 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                     <div className="col-span-3 flex items-center gap-1.5 min-w-0 pr-1">
                       {p.avatarUrl && (
                         <img
-                          src={p.avatarUrl}
+                          src={getSafeAvatarUrl(p.avatarUrl, p.manager)}
                           alt={p.manager}
-                          crossOrigin="anonymous"
-                          referrerPolicy="no-referrer"
                           className="w-4 h-4 rounded-full object-cover shrink-0 border border-slate-400 bg-white"
                         />
                       )}

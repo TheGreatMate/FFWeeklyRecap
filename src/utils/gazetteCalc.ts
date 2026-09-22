@@ -136,29 +136,40 @@ export function buildGazetteReportData(
     };
 
     const pointsLeaderboard = (c.allRankedTeams || []).map((t, idx) => ({
-      rank: idx + 1,
+      rank: t.isEliminated ? '—' : idx + 1,
       manager: t.ownerName,
       teamName: t.teamName,
       points: t.points,
-      record: t.rosterId === chopped?.rosterId ? 'ELIMINATED' : 'SAFE',
+      record: t.rosterId === chopped?.rosterId
+        ? `CHOPPED (W${week})`
+        : t.isEliminated
+        ? `OUT (W${t.eliminatedWeek || 1})`
+        : 'SAFE',
       avatarUrl: t.avatarUrl,
     }));
 
     const matchupLedger = (c.allRankedTeams || []).map((t, idx) => {
       const isVictim = t.rosterId === chopped?.rosterId;
+      const isPriorElim = Boolean(t.isEliminated);
       const marginOverChop = chopped
         ? Number((t.points - chopped.points).toFixed(2))
         : 0;
       return {
         winner: t.ownerName,
         winnerPts: t.points,
-        loser: isVictim ? 'The Guillotine' : `${marginOverChop} pts clear`,
-        loserPts: chopped?.points || 0,
+        loser: isVictim
+          ? 'The Guillotine'
+          : isPriorElim
+          ? `Out in W${t.eliminatedWeek || 1}`
+          : `${marginOverChop} pts clear`,
+        loserPts: isPriorElim ? 0 : (chopped?.points || 0),
         recap: isVictim
-          ? `🪓 CHOPPED. Lowest score in the league. Roster sent to waivers.`
+          ? `🪓 CHOPPED IN WEEK ${week}. Lowest active score (${t.points} pts). Roster sent to waivers.`
+          : isPriorElim
+          ? `💀 ELIMINATED (Week ${t.eliminatedWeek || 1}). Roster was already wiped in a prior week.`
           : idx === 0
           ? `Apex Predator. Untouchable performance atop the ladder.`
-          : idx === (c.allRankedTeams?.length || 0) - 2
+          : idx === (c.activeTeams?.length || (c.allRankedTeams?.length || 0)) - 2
           ? `Narrow Escape! Dodged the blade by just ${marginOverChop} pts.`
           : `Clean survival. Safely through to Week ${week + 1}.`,
         winnerAvatarUrl: t.avatarUrl,
@@ -167,24 +178,29 @@ export function buildGazetteReportData(
     });
 
     const powerRankings = (c.allRankedTeams || []).map((t, idx) => {
+      const isVictim = t.rosterId === chopped?.rosterId;
+      const isPriorElim = Boolean(t.isEliminated);
+      const activeCount = c.activeTeams?.length || (c.allRankedTeams?.length || 0);
       const rank = idx + 1;
       let note = 'Solid survival.';
-      if (t.rosterId === chopped?.rosterId) {
-        note = `${t.points} pts. Extinguished. Roster liquidated to waivers.`;
+      if (isVictim) {
+        note = `${t.points} pts. The axe falls in Week ${week}. Roster liquidated to waivers.`;
+      } else if (isPriorElim) {
+        note = `Eliminated in Week ${t.eliminatedWeek || 1}. Out of contention.`;
       } else if (rank === 1) {
         note = `${t.points} pts. The league benchmark. Untouchable roster depth.`;
       } else if (rank <= 3) {
         note = `${t.points} pts. Elite safety margin. Primed for a deep run.`;
-      } else if (rank === (c.allRankedTeams?.length || 0) - 1) {
+      } else if (rank === activeCount - 1) {
         note = `${t.points} pts. Staring into the abyss. Needs immediate FAAB reinforcement.`;
       } else {
         note = `${t.points} pts. Quiet survival, but the margins get thinner every week.`;
       }
       return {
-        rank,
+        rank: isPriorElim ? '—' : rank,
         manager: t.ownerName,
         teamName: t.teamName,
-        record: t.rosterId === chopped?.rosterId ? '0-1 (Out)' : '1-0',
+        record: isVictim ? `Chopped (W${week})` : isPriorElim ? `Eliminated (W${t.eliminatedWeek || 1})` : 'Survivor',
         points: t.points,
         rationale: note,
         avatarUrl: t.avatarUrl,
@@ -496,6 +512,7 @@ export function buildGazetteReportData(
         points: unlucky.team.points,
         opponent: unlucky.matchup.winner.ownerName,
         opponentPts: unlucky.matchup.winner.points,
+        avatarUrl: unlucky.team.avatarUrl,
         consolationPrize: sidePotConfig.enabled
           ? `$${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout`
           : 'High-scoring sympathy & moral victory',
@@ -620,7 +637,7 @@ export function buildGazetteReportData(
       points: gmPoints,
       record: '1-0',
       rationale: `League-high score. Beat the competition with an electric roster. It's hard to argue with the results.`,
-      avatarUrl: highScorer?.avatarUrl,
+      avatarUrl: highScorer?.avatarUrl || fallbackWinner?.avatarUrl,
     },
     blowoutOfTheWeek: {
       winner: boWinner,
@@ -630,10 +647,10 @@ export function buildGazetteReportData(
       loserPts: boLoserPts,
       recap: `${boWinner}'s ${boWinnerPts} was one of the highest scores, while ${boLoser}'s ${boLoserPts} was the lowest. That's not a matchup—that's a wellness check.`,
       reactionCaption: `${boLoser}'s Week ${week} mood.`,
-      winnerAvatarUrl: blowout?.winner.avatarUrl,
-      loserAvatarUrl: blowout?.loser.avatarUrl,
-      winnerTeamName: blowout?.winner.teamName,
-      loserTeamName: blowout?.loser.teamName,
+      winnerAvatarUrl: blowout?.winner.avatarUrl || fallbackWinner?.avatarUrl,
+      loserAvatarUrl: blowout?.loser.avatarUrl || fallbackLoser?.avatarUrl,
+      winnerTeamName: blowout?.winner.teamName || fallbackWinner?.teamName,
+      loserTeamName: blowout?.loser.teamName || fallbackLoser?.teamName,
     },
     galaxyBrainMove: {
       manager: galaxyManager,

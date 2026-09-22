@@ -412,9 +412,26 @@ app.get('/api/sleeper/players/batch', async (req, res) => {
   }
 });
 
+app.get('/api/sleeper/league/:leagueId/matchups/:week', async (req, res) => {
+  try {
+    const { leagueId, week } = req.params;
+    const sleeperRes = await fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${week}`);
+    if (!sleeperRes.ok) {
+      return res.status(sleeperRes.status).json({ error: `Sleeper matchups fetch failed: ${sleeperRes.statusText}` });
+    }
+    const data = await sleeperRes.json();
+    res.json(data || []);
+  } catch (error: any) {
+    console.error('Error fetching Sleeper matchups:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
 app.get('/api/sleeper/league/:leagueId/details/:week', async (req, res) => {
   try {
     const { leagueId, week } = req.params;
+    const currentWeekNum = parseInt(week, 10) || 1;
+
     const [leagueRes, rostersRes, usersRes, matchupsRes] = await Promise.all([
       fetch(`https://api.sleeper.app/v1/league/${leagueId}`),
       fetch(`https://api.sleeper.app/v1/league/${leagueId}/rosters`),
@@ -426,6 +443,25 @@ app.get('/api/sleeper/league/:leagueId/details/:week', async (req, res) => {
     const rosters = rostersRes.ok ? await rostersRes.json() : [];
     const users = usersRes.ok ? await usersRes.json() : [];
     const matchups = matchupsRes.ok ? await matchupsRes.json() : [];
+
+    // Concurrently fetch prior week matchups for chronological elimination tracking in Guillotine leagues
+    const priorMatchups: Record<number, any[]> = {};
+    if (currentWeekNum > 1 && currentWeekNum <= 18) {
+      const priorPromises = [];
+      for (let w = 1; w < currentWeekNum; w++) {
+        const weekIdx = w;
+        priorPromises.push(
+          fetch(`https://api.sleeper.app/v1/league/${leagueId}/matchups/${weekIdx}`)
+            .then(async (r) => {
+              if (r.ok) {
+                priorMatchups[weekIdx] = await r.json();
+              }
+            })
+            .catch(() => {})
+        );
+      }
+      await Promise.all(priorPromises);
+    }
 
     // Collect all unique player IDs present in matchups and rosters
     const playerIds = new Set<string>();
@@ -452,6 +488,7 @@ app.get('/api/sleeper/league/:leagueId/details/:week', async (req, res) => {
       rosters,
       users,
       matchups,
+      priorMatchups,
       players: resolvedPlayers,
     });
   } catch (error: any) {

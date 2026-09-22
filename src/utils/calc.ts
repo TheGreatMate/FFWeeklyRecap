@@ -114,6 +114,69 @@ export function detectLeagueFormat(
   return 'head_to_head';
 }
 
+/**
+ * Generates an elegant, crisp SVG sports monogram data URL with team initials.
+ * Avoids any external network calls, CORS problems, or random robot cartoon avatars.
+ */
+export function generateMonogramDataUrl(name: string = ''): string {
+  const cleanName = (name || '').trim();
+  const initials = cleanName
+    ? cleanName
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s[0].toUpperCase())
+        .join('')
+    : 'TM';
+
+  let hash = 0;
+  for (let i = 0; i < cleanName.length; i++) {
+    hash = (hash << 5) - hash + cleanName.charCodeAt(i);
+    hash |= 0;
+  }
+  const hues = [210, 225, 260, 280, 160, 190, 330, 35];
+  const hue = hues[Math.abs(hash) % hues.length];
+  const bg = `hsl(${hue}, 45%, 22%)`;
+  const stroke = `hsl(${hue}, 70%, 55%)`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+    <rect width="96" height="96" rx="48" fill="${bg}" stroke="${stroke}" stroke-width="4"/>
+    <text x="48" y="58" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="34" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">${initials || 'TM'}</text>
+  </svg>`;
+
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+/**
+ * Resolves the genuine profile photo or team avatar URL from Sleeper data.
+ * Checks team-specific avatar on roster metadata first, then user metadata avatar,
+ * then user avatar ID. If no photo was uploaded, generates a clean sports monogram
+ * data URL with their initials, never generating random alien/robot cartoons.
+ */
+export function resolveTeamAvatarUrl(
+  roster?: SleeperRoster,
+  user?: SleeperLeagueUser,
+  ownerName: string = ''
+): string {
+  const raw =
+    roster?.metadata?.avatar ||
+    user?.metadata?.avatar ||
+    user?.avatar;
+
+  if (raw && typeof raw === 'string' && raw.trim()) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (trimmed.startsWith('uploads/')) {
+      return `https://sleepercdn.com/${trimmed}`;
+    }
+    return `https://sleepercdn.com/avatars/thumbs/${trimmed}`;
+  }
+
+  return generateMonogramDataUrl(ownerName);
+}
+
 export function calculateWeekStats(
   rosters: SleeperRoster[],
   users: SleeperLeagueUser[],
@@ -121,9 +184,13 @@ export function calculateWeekStats(
   weekNum: number = 1,
   playerMap?: Record<string, CompactPlayer>
 ): WeekStats {
-  // Map users by user_id
+  // Map users by user_id as string
   const userMap = new Map<string, SleeperLeagueUser>();
-  users.forEach((u) => userMap.set(u.user_id, u));
+  users.forEach((u) => {
+    if (u && u.user_id) {
+      userMap.set(String(u.user_id), u);
+    }
+  });
 
   // Map rosters by roster_id
   const rosterMap = new Map<number, SleeperRoster>();
@@ -134,22 +201,27 @@ export function calculateWeekStats(
 
   matchupItems.forEach((m) => {
     const roster = rosterMap.get(m.roster_id);
-    const ownerId = roster?.owner_id || '';
-    const user = userMap.get(ownerId);
+    const ownerId = roster?.owner_id ? String(roster.owner_id) : '';
+    let user = userMap.get(ownerId);
+    if (!user && roster?.co_owners && roster.co_owners.length > 0) {
+      for (const co of roster.co_owners) {
+        const coUser = userMap.get(String(co));
+        if (coUser) {
+          user = coUser;
+          break;
+        }
+      }
+    }
 
     const teamName =
+      roster?.metadata?.team_name?.trim() ||
       user?.metadata?.team_name?.trim() ||
       user?.display_name ||
       `Team ${m.roster_id}`;
 
-    const ownerName = user?.display_name || `Owner ${m.roster_id}`;
+    const ownerName = user?.display_name || user?.metadata?.team_name?.trim() || `Owner ${m.roster_id}`;
 
-    const avatarId = user?.metadata?.avatar || user?.avatar;
-    const avatarUrl = avatarId
-      ? avatarId.startsWith('http')
-        ? avatarId
-        : `https://sleepercdn.com/avatars/thumbs/${avatarId}`
-      : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(ownerName)}`;
+    const avatarUrl = resolveTeamAvatarUrl(roster, user, ownerName);
 
     // Calculate bench points from players_points not in starters
     const starterSet = new Set(m.starters || []);
@@ -553,32 +625,43 @@ export function calculateChoppedStats(
   users: SleeperLeagueUser[],
   matchupItems: SleeperMatchupItem[],
   weekNum: number = 1,
-  playerMap?: Record<string, CompactPlayer>
+  playerMap?: Record<string, CompactPlayer>,
+  priorWeeksMatchups?: Record<number, SleeperMatchupItem[]>,
+  explicitEliminatedRosterIds?: number[] | Set<number>
 ): ChoppedWeekStats {
   const userMap = new Map<string, SleeperLeagueUser>();
-  users.forEach((u) => userMap.set(u.user_id, u));
+  users.forEach((u) => {
+    if (u && u.user_id) {
+      userMap.set(String(u.user_id), u);
+    }
+  });
 
   const rosterMap = new Map<number, SleeperRoster>();
   rosters.forEach((r) => rosterMap.set(r.roster_id, r));
 
   const teams: TeamInfo[] = matchupItems.map((m) => {
     const roster = rosterMap.get(m.roster_id);
-    const ownerId = roster?.owner_id || '';
-    const user = userMap.get(ownerId);
+    const ownerId = roster?.owner_id ? String(roster.owner_id) : '';
+    let user = userMap.get(ownerId);
+    if (!user && roster?.co_owners && roster.co_owners.length > 0) {
+      for (const co of roster.co_owners) {
+        const coUser = userMap.get(String(co));
+        if (coUser) {
+          user = coUser;
+          break;
+        }
+      }
+    }
 
     const teamName =
+      roster?.metadata?.team_name?.trim() ||
       user?.metadata?.team_name?.trim() ||
       user?.display_name ||
       `Team ${m.roster_id}`;
 
-    const ownerName = user?.display_name || `Owner ${m.roster_id}`;
+    const ownerName = user?.display_name || user?.metadata?.team_name?.trim() || `Owner ${m.roster_id}`;
 
-    const avatarId = user?.metadata?.avatar || user?.avatar;
-    const avatarUrl = avatarId
-      ? avatarId.startsWith('http')
-        ? avatarId
-        : `https://sleepercdn.com/avatars/thumbs/${avatarId}`
-      : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(ownerName)}`;
+    const avatarUrl = resolveTeamAvatarUrl(roster, user, ownerName);
 
     const rawStarters = m.starters || [];
     const starterDetails = rawStarters.map((id, idx) => {
@@ -624,16 +707,92 @@ export function calculateChoppedStats(
     };
   });
 
-  // Sort descending by points
-  teams.sort((a, b) => b.points - a.points);
+  // Track all managers eliminated in weeks prior to weekNum
+  const eliminatedMap = new Map<number, { week: number; points: number }>();
 
-  const apexSurvivor = teams.length > 0 ? teams[0] : null;
-  const choppedTeam = teams.length > 0 ? teams[teams.length - 1] : null;
+  // 1. Process explicit eliminated roster IDs if provided
+  if (explicitEliminatedRosterIds) {
+    const idSet = Array.isArray(explicitEliminatedRosterIds)
+      ? explicitEliminatedRosterIds
+      : Array.from(explicitEliminatedRosterIds);
+    idSet.forEach((rId) => {
+      eliminatedMap.set(rId, { week: 1, points: 0 });
+    });
+  }
 
-  // Narrow Escape: 2nd lowest score (last surviving team above the chop line)
+  // 2. If prior weeks matchup data is provided, simulate who got beheaded chronologically
+  if (priorWeeksMatchups && weekNum > 1) {
+    const priorWeeks = Object.keys(priorWeeksMatchups)
+      .map(Number)
+      .filter((w) => w < weekNum)
+      .sort((a, b) => a - b);
+
+    for (const w of priorWeeks) {
+      const wMatchups = priorWeeksMatchups[w] || [];
+      if (wMatchups.length > 0) {
+        // Only consider teams that have not yet been eliminated in prior weeks
+        const activeInW = wMatchups.filter((m) => !eliminatedMap.has(m.roster_id));
+        if (activeInW.length > 0) {
+          activeInW.sort((a, b) => (a.points ?? 0) - (b.points ?? 0));
+          const victim = activeInW[0];
+          eliminatedMap.set(victim.roster_id, {
+            week: w,
+            points: Number((victim.points ?? 0).toFixed(2)),
+          });
+        }
+      }
+    }
+  }
+
+  // 3. Heuristic fallback when prior weeks data is not available:
+  // In a guillotine league, if weekNum > 1 and a roster scored 0.00 pts with 0 starters (or all 0 pts),
+  // while other surviving rosters have active lineups and points > 0, this team was already eliminated!
+  if (weekNum > 1) {
+    const nonZeroTeams = teams.filter((t) => t.points > 0);
+    if (nonZeroTeams.length >= 2) {
+      teams.forEach((t) => {
+        if (!eliminatedMap.has(t.rosterId)) {
+          const hasNoActiveStarters = !t.starterIds || t.starterIds.length === 0 || t.startersPoints.every((pt) => pt === 0);
+          if (t.points === 0 && hasNoActiveStarters) {
+            eliminatedMap.set(t.rosterId, { week: 1, points: 0 });
+          }
+        }
+      });
+    }
+  }
+
+  // Separate active living survivors for this week from previously eliminated teams
+  let activeTeams = teams.filter((t) => !eliminatedMap.has(t.rosterId));
+  const previouslyEliminatedTeams = teams.filter((t) => eliminatedMap.has(t.rosterId));
+
+  // Safety fallback: if all teams got filtered out, keep all teams active
+  if (activeTeams.length === 0) {
+    activeTeams = [...teams];
+  }
+
+  // Sort active surviving teams descending by points
+  activeTeams.sort((a, b) => b.points - a.points);
+
+  const apexSurvivor = activeTeams.length > 0 ? activeTeams[0] : null;
+  const choppedTeam = activeTeams.length > 0 ? activeTeams[activeTeams.length - 1] : null;
+
+  if (choppedTeam) {
+    choppedTeam.isChoppedThisWeek = true;
+    choppedTeam.eliminatedWeek = weekNum;
+  }
+
+  // Mark all previously eliminated teams with their metadata
+  previouslyEliminatedTeams.forEach((t) => {
+    const elimInfo = eliminatedMap.get(t.rosterId);
+    t.isEliminated = true;
+    t.eliminatedWeek = elimInfo ? elimInfo.week : 1;
+    t.isChoppedThisWeek = false;
+  });
+
+  // Narrow Escape: 2nd lowest score among ACTIVE surviving teams above this week's chop line
   let narrowEscape: { team: TeamInfo; marginOverChopped: number } | null = null;
-  if (teams.length >= 2 && choppedTeam) {
-    const survivingBubbleTeam = teams[teams.length - 2];
+  if (activeTeams.length >= 2 && choppedTeam) {
+    const survivingBubbleTeam = activeTeams[activeTeams.length - 2];
     const margin = Number((survivingBubbleTeam.points - choppedTeam.points).toFixed(2));
     narrowEscape = {
       team: survivingBubbleTeam,
@@ -641,18 +800,18 @@ export function calculateChoppedStats(
     };
   }
 
-  // Danger zone: bottom 3 survivors above the cut
-  const dangerZone = teams.slice(Math.max(0, teams.length - 4), Math.max(0, teams.length - 1));
-  const safeSurvivors = teams.slice(0, Math.max(0, teams.length - 4));
+  // Danger zone: bottom 3 survivors above the cut among ACTIVE teams
+  const dangerZone = activeTeams.slice(Math.max(0, activeTeams.length - 4), Math.max(0, activeTeams.length - 1));
+  const safeSurvivors = activeTeams.slice(0, Math.max(0, activeTeams.length - 4));
 
-  const totalPoints = teams.reduce((acc, t) => acc + t.points, 0);
-  const averageScore = teams.length > 0 ? Number((totalPoints / teams.length).toFixed(2)) : 0;
-  const mid = Math.floor(teams.length / 2);
+  const totalPoints = activeTeams.reduce((acc, t) => acc + t.points, 0);
+  const averageScore = activeTeams.length > 0 ? Number((totalPoints / activeTeams.length).toFixed(2)) : 0;
+  const mid = Math.floor(activeTeams.length / 2);
   const medianScore =
-    teams.length > 0
-      ? teams.length % 2 !== 0
-        ? teams[mid].points
-        : Number(((teams[mid - 1].points + teams[mid].points) / 2).toFixed(2))
+    activeTeams.length > 0
+      ? activeTeams.length % 2 !== 0
+        ? activeTeams[mid].points
+        : Number(((activeTeams[mid - 1].points + activeTeams[mid].points) / 2).toFixed(2))
       : 0;
 
   const choppedRosterStarters = choppedTeam ? choppedTeam.starters : [];
@@ -663,15 +822,33 @@ export function calculateChoppedStats(
         : getTopRankedPlayers(choppedRosterDetails || [], 3))
     : [];
 
+  // allRankedTeams: active surviving teams first (ranked 1..N), followed by previously eliminated teams
+  const allRankedTeams = [...activeTeams, ...previouslyEliminatedTeams];
+
+  const previouslyEliminated = previouslyEliminatedTeams.map((t) => {
+    const info = eliminatedMap.get(t.rosterId);
+    return {
+      rosterId: t.rosterId,
+      teamName: t.teamName,
+      ownerName: t.ownerName,
+      avatarUrl: t.avatarUrl,
+      week: info ? info.week : 1,
+      points: info ? info.points : t.points,
+    };
+  });
+
   return {
     week: weekNum,
     totalTeams: teams.length,
+    survivingTeamsCount: activeTeams.length,
     choppedTeam,
     apexSurvivor,
     narrowEscape,
     dangerZone,
     safeSurvivors,
-    allRankedTeams: teams,
+    allRankedTeams,
+    activeTeams,
+    previouslyEliminated,
     averageScore,
     medianScore,
     choppedRosterStarters,

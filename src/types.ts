@@ -37,6 +37,7 @@ export interface SleeperLeague {
 export interface SleeperRoster {
   roster_id: number;
   owner_id: string;
+  co_owners?: string[] | null;
   players?: string[] | null;
   starters?: string[] | null;
   settings?: {
@@ -105,6 +106,10 @@ export interface TeamInfo {
   allPlayerIds?: string[];
   allPlayerDetails?: CompactPlayer[];
   topRankedPlayers?: CompactPlayer[];
+  // Elimination tracking for Guillotine/Chopped leagues
+  isEliminated?: boolean;
+  eliminatedWeek?: number;
+  isChoppedThisWeek?: boolean;
 }
 
 export interface HeadToHeadMatchup {
@@ -168,9 +173,19 @@ export interface WeekStats {
 
 export type LeagueFormat = 'head_to_head' | 'chopped' | 'best_ball';
 
+export interface PriorElimination {
+  rosterId: number;
+  teamName: string;
+  ownerName: string;
+  avatarUrl: string;
+  week: number;
+  points: number;
+}
+
 export interface ChoppedWeekStats {
   week: number;
   totalTeams: number;
+  survivingTeamsCount?: number;
   choppedTeam: TeamInfo | null;
   apexSurvivor: TeamInfo | null;
   narrowEscape: {
@@ -180,6 +195,8 @@ export interface ChoppedWeekStats {
   dangerZone: TeamInfo[]; // Bottom 3 survivors above the chopped team
   safeSurvivors: TeamInfo[];
   allRankedTeams: TeamInfo[];
+  activeTeams?: TeamInfo[];
+  previouslyEliminated?: PriorElimination[];
   averageScore: number;
   medianScore: number;
   choppedRosterStarters: string[];
@@ -273,7 +290,7 @@ export interface GazetteReportData {
     loserAvatarUrl?: string;
   }[];
   pointsLeaderboard: {
-    rank: number;
+    rank: number | string;
     manager: string;
     teamName: string;
     points: number;
@@ -294,7 +311,7 @@ export interface GazetteReportData {
     nextWeekFee: number;
   };
   powerRankings: {
-    rank: number;
+    rank: number | string;
     manager: string;
     teamName: string;
     record: string;
