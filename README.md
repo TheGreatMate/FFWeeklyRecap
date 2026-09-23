@@ -14,33 +14,30 @@ Companion app engineered to run alongside the **Fantasy Football War Room** on *
 
 ## ✨ Features
 
-- 📰 **The 3-Page Commissioner Gazette**:
-  - **Page 1: Front Page** — Historic lead story headline, Matchup of the Week, Blowout of the Week ("The Woodchipper"), and The Heartbreaker ("Tough Luck Club").
-  - **Page 2: The Honor Roll & The Shame Chamber** — High Roller, Slacker Award, Overachiever, and Bench Blunder.
-  - **Page 3: League Ledger & Side Pots** — Standings, scoring streaks, playoff bubble tracker, side pot desk payouts, and waiver wire dump.
-  - **One-Click Export**: Print to PDF, capture high-res PNGs, or copy raw markdown to paste into Sleeper/Discord.
+- 📰 **The 3-Page Commissioner Gazette** (Head-to-Head leagues):
+  - **Page 1: Front Page** — Masthead, lead headline and story, press photo, Blowout of the Week, GM of the Week, Galaxy Brain Move, standings, and the Unlucky Bastard Club (highest losing score).
+  - **Page 2: The Week Ledger** — Matchup ledger, final points leaderboard, and the Side Pot Desk.
+  - **Page 3: Rankings & Notebook** — Hindsight 20/20 bench regrets, power rankings, and the Commissioner's Notebook (Fraud Watch, Hot Seat, Waiver Wire, Game of the Week).
+  - **Export**: Save a full-bleed dark-mode PDF, print, save a standalone HTML file, or copy/download Markdown to paste into Sleeper or Discord.
 
-- 🪓 **Chopped / Guillotine Survivor Eliminator Mode**:
-  - Live cut-line visualizer.
-  - Identifies the lowest-scoring team on the chopping block each week.
-  - Generates death warrant obituaries and rosters about to be dumped onto the waiver wire.
+- 🪓 **Chopped / Guillotine Survivor Mode**:
+  - Identifies the lowest-scoring team chopped each week, plus the Apex Survivor, Narrow Escape, and Danger Zone.
+  - Hall of the Fallen tracks every prior week's eliminated team.
+  - Highlights the top players from the chopped roster heading to waivers.
 
-- 🎭 **Multi-Tone Commissioner AI & Analytical Engine**:
-  - **Savage Roast**: Pours salt in wounds and mocks benching decisions.
-  - **ESPN SportsCenter**: Crisp professional broadcast journalism.
-  - **The Grim Reaper**: Dark comedy celebrating eliminations and cellar-dwellers.
-  - **Caesar Flickerman**: Flamboyant *Hunger Games* style survival recaps.
-  - **Benevolent Commish**: Diplomatic, encouraging commissioner prose.
-  - **100% Offline Capable**: Works straight out of the box with the built-in analytical engine. Optional Google Gemini integration if a key is provided.
+- 🎭 **Multi-Tone Commissioner Notes**:
+  - Head-to-Head: Savage Roast, ESPN SportsCenter Anchor, Benevolent Commish, Gladiatorial Hype, RNG Conspiracy Theorist.
+  - Chopped: The Executioner / Grim Reaper, Hunger Games Announcer, plus Roast, SportsCenter, and Commish variants.
+  - **Works offline**: The built-in engine needs no API key. Add a Google Gemini key (server env var or in the app) for AI-written notes.
 
 - 💰 **Side Pot Desk**:
-  - High score of the week payouts.
-  - Bad beat bounties and longest bench-warmer jackpots.
-  - Cumulative season totals and pending payout balance tracker.
+  - Configurable entry fee and pot size.
+  - Weekly high-score and biggest-blowout bounties.
 
 - 🚀 **Zero-Config Sleeper Integration**:
-  - Enter any Sleeper League ID or Commissioner Username to auto-discover leagues.
-  - Pulls real team names, owner avatars, starter rosters, bench stashes, and real-time matchup points.
+  - Enter a Sleeper username or League ID to find leagues for the 2024–2026 seasons.
+  - Pulls real team names, owner avatars, starters, benches, and matchup points.
+  - Not ready to connect? Hit **Try a Demo** on the landing page.
 
 ---
 
@@ -160,6 +157,17 @@ services:
 | `PORT` | No | `3000` | Internal server port (mapped to host `3085`). |
 | `NODE_ENV` | No | `production` | Node execution environment. |
 | `GEMINI_API_KEY` | **Optional** | *(empty)* | Optional Gemini API key. If omitted, the app uses its built-in analytical engine with zero external API calls. |
+| `DATA_DIR` | No | `/config` | Where the Sleeper player dictionary is cached (refreshed every 24h). Falls back to `/config`, then the system temp folder, if not writable. |
+
+### Persistent storage
+
+The app caches Sleeper's NFL player dictionary (about 1 MB) in `/config` so it survives container restarts. The container runs as a non-root user (UID `1001`), so the host folder must be writable by that user:
+
+```bash
+chown -R 1001:1001 /mnt/user/appdata/ffweeklyrecap
+```
+
+If the folder isn't writable, the app still works. It logs a warning, caches to the container's temp folder instead, and downloads the dictionary again after each restart.
 
 ---
 
