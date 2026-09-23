@@ -70,6 +70,14 @@ function rasterizeDataUrlSvg(svgDataUrl: string, targetWidth: number, targetHeig
  * tainted canvases, or missing photos.
  * Returns a restore function that resets all image tags to their original source attributes.
  */
+function isSameOrigin(url: string): boolean {
+  try {
+    return new URL(url, window.location.origin).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 async function inlineAllImagesForExport(container: HTMLElement): Promise<() => void> {
   const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
   const originalAttributes: { el: HTMLImageElement; src: string; crossOrigin: string | null }[] = [];
@@ -98,6 +106,9 @@ async function inlineAllImagesForExport(container: HTMLElement): Promise<() => v
         // keep rawSrc
       }
     }
+
+    // Same-origin images never taint the canvas, and the server only proxies Sleeper's CDN
+    if (isSameOrigin(targetUrl)) return;
 
     if (!remoteUrls.includes(targetUrl)) {
       remoteUrls.push(targetUrl);
@@ -147,7 +158,7 @@ async function inlineAllImagesForExport(container: HTMLElement): Promise<() => v
       let dataUrl = urlToDataUrlMap[lookupUrl] || urlToDataUrlMap[rawSrc];
 
       // If batch didn't return it, try proxy endpoint
-      if (!dataUrl) {
+      if (!dataUrl && !isSameOrigin(lookupUrl)) {
         try {
           const proxyRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(lookupUrl)}`);
           if (proxyRes.ok) {

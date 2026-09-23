@@ -1,11 +1,23 @@
 import { GazetteReportData } from '../types';
 
 /**
+ * Receives user-facing export errors. The app runs inside iframes, so callers
+ * render these in the UI instead of using window.alert.
+ */
+export type ExportErrorHandler = (message: string) => void;
+
+const logExportError: ExportErrorHandler = (message) => console.error(message);
+
+/**
  * Robust print helper for the 3-Page Weekly Gazette Report.
  * Uses an isolated hidden iframe so that ONLY the Gazette document prints,
  * preventing any surrounding website UI, navbars, sidebars, or buttons from appearing.
  */
-export function printGazetteElement(elementId: string = 'gazette-document', isDarkMode?: boolean) {
+export function printGazetteElement(
+  elementId: string = 'gazette-document',
+  isDarkMode?: boolean,
+  onError: ExportErrorHandler = logExportError
+) {
   const elem = document.getElementById(elementId);
   if (!elem) {
     window.print();
@@ -36,7 +48,7 @@ export function printGazetteElement(elementId: string = 'gazette-document', isDa
     try {
       window.print();
     } catch (e) {
-      openPrintWindowFromElement(elem, dark);
+      openPrintWindowFromElement(elem, dark, onError);
     }
     return;
   }
@@ -113,7 +125,7 @@ export function printGazetteElement(elementId: string = 'gazette-document', isDa
       printFrame?.contentWindow?.print();
     } catch (err) {
       console.warn('Isolated iframe print failed, opening dedicated printable window:', err);
-      openPrintWindowFromElement(elem, isDarkMode);
+      openPrintWindowFromElement(elem, isDarkMode, onError);
     }
   }, 400);
 }
@@ -122,10 +134,14 @@ export function printGazetteElement(elementId: string = 'gazette-document', isDa
  * Opens a dedicated popup print window containing only the Gazette document
  * with inline typography and print stylesheets pre-loaded.
  */
-export function openPrintWindowFromElement(elem: HTMLElement, isDarkMode: boolean = false) {
+export function openPrintWindowFromElement(
+  elem: HTMLElement,
+  isDarkMode: boolean = false,
+  onError: ExportErrorHandler = logExportError
+) {
   const printWindow = window.open('', '_blank', 'width=1000,height=1200,menubar=no,toolbar=no,location=no,status=no');
   if (!printWindow) {
-    alert('Pop-up blocked. Please allow pop-ups for this site or use the "Download HTML / Print File" button.');
+    onError('Pop-up blocked. Please allow pop-ups for this site or use the "Save HTML" button.');
     return;
   }
 
@@ -215,11 +231,12 @@ export function downloadGazetteHTML(
   elem?: HTMLElement | null,
   leagueName: string = 'Fantasy_League',
   week: number = 1,
-  isDarkMode?: boolean
+  isDarkMode?: boolean,
+  onError: ExportErrorHandler = logExportError
 ) {
   const target = elem || document.getElementById('gazette-document');
   if (!target) {
-    alert('Gazette document not found to export. Please make sure Gazette View is selected.');
+    onError('Gazette document not found to export. Please make sure Gazette View is selected.');
     return;
   }
 

@@ -157,12 +157,52 @@ app.get('/api/sleeper/league/:leagueId', async (req, res) => {
   }
 });
 
+// Image proxy guard: only Sleeper's CDN may be fetched server-side. Without this,
+// the proxy endpoints would fetch any URL, including internal network addresses.
+const ALLOWED_IMAGE_HOSTS = ['sleepercdn.com'];
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_FETCH_TIMEOUT_MS = 8000;
+const MAX_BATCH_IMAGE_URLS = 100;
+
+function isAllowedImageUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return false;
+    const host = url.hostname.toLowerCase();
+    return ALLOWED_IMAGE_HOSTS.some((allowed) => host === allowed || host.endsWith(`.${allowed}`));
+  } catch {
+    return false;
+  }
+}
+
+async function fetchAllowedImage(url: string): Promise<{ contentType: string; buffer: Buffer } | null> {
+  const imgRes = await fetch(url, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'image/*',
+    },
+  });
+  if (!imgRes.ok) return null;
+  const contentType = imgRes.headers.get('content-type') || '';
+  if (!contentType.startsWith('image/')) return null;
+  if (Number(imgRes.headers.get('content-length') || 0) > MAX_IMAGE_BYTES) return null;
+  const buffer = Buffer.from(await imgRes.arrayBuffer());
+  if (buffer.length > MAX_IMAGE_BYTES) return null;
+  return { contentType, buffer };
+}
+
 // Convert images to Base64 data URLs server-side to guarantee 100% fidelity in PDF export
 app.post('/api/convert-images-base64', async (req, res) => {
   try {
     const { urls } = req.body;
     if (!Array.isArray(urls)) {
       return res.status(400).json({ error: 'urls must be an array' });
+    }
+    if (urls.length > MAX_BATCH_IMAGE_URLS) {
+      return res.status(400).json({ error: `At most ${MAX_BATCH_IMAGE_URLS} urls per request` });
     }
 
     const results: Record<string, string> = {};
@@ -174,18 +214,11 @@ app.post('/api/convert-images-base64', async (req, res) => {
           results[url] = url;
           return;
         }
+        if (!isAllowedImageUrl(url)) return;
         try {
-          const imgRes = await fetch(url, {
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              Accept: 'image/*,*/*',
-            },
-          });
-          if (!imgRes.ok) return;
-          const contentType = imgRes.headers.get('content-type') || 'image/png';
-          const buffer = Buffer.from(await imgRes.arrayBuffer());
-          results[url] = `data:${contentType};base64,${buffer.toString('base64')}`;
+          const img = await fetchAllowedImage(url);
+          if (!img) return;
+          results[url] = `data:${img.contentType};base64,${img.buffer.toString('base64')}`;
         } catch (err) {
           console.warn('Failed to convert image server-side:', url, err);
         }
@@ -201,25 +234,18 @@ app.post('/api/convert-images-base64', async (req, res) => {
 
 // Proxy single image with universal CORS for canvas rendering
 app.get('/api/proxy-image', async (req, res) => {
-  const imageUrl = req.query.url as string;
-  if (!imageUrl) return res.status(400).send('Missing url parameter');
+  const imageUrl = req.query.url;
+  if (!imageUrl || typeof imageUrl !== 'string') return res.status(400).send('Missing url parameter');
+  if (!isAllowedImageUrl(imageUrl)) return res.status(403).send('Image host not allowed');
   try {
-    const imgRes = await fetch(imageUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        Accept: 'image/*,*/*',
-      },
-    });
-    if (!imgRes.ok) return res.status(imgRes.status).send('Failed to fetch image');
-    const contentType = imgRes.headers.get('content-type') || 'image/png';
-    const buffer = Buffer.from(await imgRes.arrayBuffer());
-    res.setHeader('Content-Type', contentType);
+    const img = await fetchAllowedImage(imageUrl);
+    if (!img) return res.status(502).send('Failed to fetch image');
+    res.setHeader('Content-Type', img.contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.send(buffer);
-  } catch (err: any) {
-    res.status(500).send(err.message || 'Proxy error');
+    res.send(img.buffer);
+  } catch {
+    res.status(502).send('Proxy error');
   }
 });
 

@@ -14,6 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { WeekStats, ChoppedWeekStats, LeagueFormat, TeamInfo } from '../types';
+import { generateMonogramDataUrl } from '../utils/calc';
 
 interface DualWeekComparisonProps {
   leagueName: string;
@@ -487,7 +488,7 @@ export const DualWeekComparison: React.FC<DualWeekComparisonProps> = ({
                         <img
                           src={
                             team.avatarUrl ||
-                            `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(team.manager)}`
+                            generateMonogramDataUrl(team.manager)
                           }
                           alt={team.manager}
                           referrerPolicy="no-referrer"
