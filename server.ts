@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
@@ -8,7 +9,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
@@ -235,9 +236,38 @@ interface CompactPlayer {
 
 import { SLEEPER_PLAYERS_MAP } from './src/data/sleeperPlayers';
 
+// Persistent data lives in DATA_DIR, then the Docker /config volume (only if it already exists,
+// so local dev doesn't create one), then the OS temp dir, whichever is first writable. An Unraid
+// appdata folder owned by root isn't writable by the container's non-root user, so we fall back
+// rather than fail.
+function resolveDataDir(): string {
+  const candidates = [
+    process.env.DATA_DIR,
+    fs.existsSync('/config') ? '/config' : undefined,
+    os.tmpdir(),
+  ].filter(Boolean) as string[];
+  for (const dir of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.accessSync(dir, fs.constants.W_OK);
+      return dir;
+    } catch {
+      console.warn(`Data directory ${dir} is not writable, trying next option`);
+    }
+  }
+  return os.tmpdir();
+}
+
+const DATA_DIR = resolveDataDir();
+const PLAYERS_CACHE_FILE = path.join(DATA_DIR, 'sleeper_players_compact.json');
+const PLAYERS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const PLAYERS_RETRY_AFTER_FAILURE_MS = 15 * 60 * 1000;
+console.log(`Player cache file: ${PLAYERS_CACHE_FILE}`);
+
+// The bundled snapshot is only a fallback until the live dictionary loads from disk or Sleeper.
 let playersCache: Record<string, CompactPlayer> = { ...SLEEPER_PLAYERS_MAP };
+let playersCacheExpiresAt = 0;
 let playersCacheFetchPromise: Promise<Record<string, CompactPlayer>> | null = null;
-const PLAYERS_CACHE_FILE = '/tmp/sleeper_players_compact.json';
 
 const NFL_DEFENSES: Record<string, { name: string; team: string }> = {
   ARI: { name: 'Arizona Cardinals', team: 'ARI' },
@@ -275,7 +305,7 @@ const NFL_DEFENSES: Record<string, { name: string; team: string }> = {
 };
 
 async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
-  if (playersCache && Object.keys(playersCache).length > 0) {
+  if (Date.now() < playersCacheExpiresAt) {
     return playersCache;
   }
 
@@ -289,11 +319,11 @@ async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
       if (fs.existsSync(PLAYERS_CACHE_FILE)) {
         try {
           const fileStats = fs.statSync(PLAYERS_CACHE_FILE);
-          const ageHours = (Date.now() - fileStats.mtimeMs) / (1000 * 60 * 60);
-          if (ageHours < 24) {
-            const fileData = fs.readFileSync(PLAYERS_CACHE_FILE, 'utf8');
-            playersCache = JSON.parse(fileData);
-            if (playersCache && Object.keys(playersCache).length > 1000) {
+          if (Date.now() - fileStats.mtimeMs < PLAYERS_CACHE_TTL_MS) {
+            const fromDisk = JSON.parse(fs.readFileSync(PLAYERS_CACHE_FILE, 'utf8'));
+            if (fromDisk && Object.keys(fromDisk).length > 1000) {
+              playersCache = fromDisk;
+              playersCacheExpiresAt = fileStats.mtimeMs + PLAYERS_CACHE_TTL_MS;
               return playersCache;
             }
           }
@@ -327,6 +357,7 @@ async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
       }
 
       playersCache = compact;
+      playersCacheExpiresAt = Date.now() + PLAYERS_CACHE_TTL_MS;
 
       // Persist to disk asynchronously
       fs.writeFile(PLAYERS_CACHE_FILE, JSON.stringify(compact), (err) => {
@@ -336,6 +367,8 @@ async function getSleeperPlayers(): Promise<Record<string, CompactPlayer>> {
       return playersCache;
     } catch (err) {
       console.error('Failed to load Sleeper players:', err);
+      // Keep serving the bundled/stale dictionary, but don't hit Sleeper on every request
+      playersCacheExpiresAt = Date.now() + PLAYERS_RETRY_AFTER_FAILURE_MS;
       return playersCache || {};
     } finally {
       playersCacheFetchPromise = null;

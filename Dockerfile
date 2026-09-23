@@ -35,7 +35,8 @@ COPY --from=builder /app/dist ./dist
 # Create non-root user for security
 RUN addgroup -S nodejs -g 1001 && \
     adduser -S nodeapp -u 1001 -G nodejs && \
-    chown -R nodeapp:nodejs /app
+    mkdir -p /config && \
+    chown -R nodeapp:nodejs /app /config
 
 USER nodeapp
 
