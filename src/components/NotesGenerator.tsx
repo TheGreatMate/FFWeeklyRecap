@@ -88,6 +88,33 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
     blowoutWinnerPayout:
       ((stats ? stats.matchups.length * 2 : 12) * DEFAULT_SIDE_POT_CONFIG.entryFee) / 2,
   });
+
+  // Who paid into the side pot, per week. A week with no entry means every team is in.
+  const [entrantsByWeek, setEntrantsByWeek] = useState<Record<number, number[]>>({});
+  useEffect(() => {
+    setEntrantsByWeek({});
+  }, [leagueName]);
+
+  const weekTeams = useMemo(
+    () => listWeekTeams(stats, isChopped ? choppedStats : null),
+    [stats, choppedStats, isChopped]
+  );
+  const entrantIds: number[] | null = entrantsByWeek[selectedWeek] ?? null;
+
+  // The config the Gazette sees: entry count, pot and 50/50 payouts follow the entrants
+  const effectiveSidePot = useMemo<SidePotConfig>(() => {
+    const entries = entrantIds ? entrantIds.length : weekTeams.length || sidePotConfig.totalEntries;
+    const pot = sidePotConfig.entryFee * entries;
+    return {
+      ...sidePotConfig,
+      participantRosterIds: entrantIds,
+      totalEntries: entries,
+      totalPot: pot,
+      pointsWinnerPayout: Number((pot / 2).toFixed(2)),
+      blowoutWinnerPayout: Number((pot / 2).toFixed(2)),
+    };
+  }, [sidePotConfig, entrantIds, weekTeams]);
+
   const [motto, setMotto] = useState('SAME LEAGUE. DIFFERENT LEVELS.');
   const [editionTag, setEditionTag] = useState(
     isChopped ? 'SURVIVAL ELIMINATION' : 'INAUGURAL DYNASTY SEASON'
@@ -103,12 +130,12 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       stats,
       choppedStats,
       format,
-      sidePotConfig,
+      effectiveSidePot,
       motto,
       editionTag,
       tone
     );
-  }, [leagueName, stats, choppedStats, format, sidePotConfig, motto, editionTag, tone]);
+  }, [leagueName, stats, choppedStats, format, effectiveSidePot, motto, editionTag, tone]);
 
   const [gazetteData, setGazetteData] = useState<GazetteReportData>(initialGazetteData);
   const [generatedNotes, setGeneratedNotes] = useState<string>(() =>
@@ -211,7 +238,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       stats,
       choppedStats,
       format,
-      sidePotConfig,
+      effectiveSidePot,
       motto,
       editionTag,
       newTone
@@ -233,45 +260,34 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       stats,
       choppedStats,
       format,
-      sidePotConfig,
+      effectiveSidePot,
       motto,
       isChopped ? 'SURVIVAL ELIMINATION' : 'INAUGURAL DYNASTY SEASON',
       tone
     );
     setGazetteData(updated);
     setGeneratedNotes(gazetteToMarkdown(updated));
-  }, [leagueName, isChopped, stats, choppedStats, sidePotConfig, motto, format, tone, selectedWeek]);
+  }, [leagueName, isChopped, stats, choppedStats, effectiveSidePot, motto, format, tone, selectedWeek]);
 
 
-  // Teams for the manual #1 Points winner picker, and who would win automatically
-  const weekTeams = useMemo(
-    () => listWeekTeams(stats, isChopped ? choppedStats : null),
-    [stats, choppedStats, isChopped]
-  );
-  const weekHasScores = weekTeams.some((t) => t.points > 0);
-  const autoPointsWinnerName = isChopped
-    ? choppedStats?.apexSurvivor?.ownerName
-    : stats?.highestScoringLoser?.team.ownerName || stats?.highestScorer?.ownerName;
-
-  // A manual winner pick only applies to the week it was made for
-  useEffect(() => {
-    setSidePotConfig((prev) =>
-      prev.pointsWinnerRosterId == null ? prev : { ...prev, pointsWinnerRosterId: null }
-    );
-  }, [selectedWeek, leagueName]);
-
-  // Handle entry fee / entries count change in side pot
+  // Handle enable / entry fee change in side pot (pot size is derived from entrants)
   const updateSidePot = (field: keyof SidePotConfig, value: any) => {
-    const updated = { ...sidePotConfig, [field]: value };
-    if (field === 'entryFee' || field === 'totalEntries') {
-      const fee = field === 'entryFee' ? Number(value) : sidePotConfig.entryFee;
-      const count = field === 'totalEntries' ? Number(value) : sidePotConfig.totalEntries;
-      const pot = fee * count;
-      updated.totalPot = pot;
-      updated.pointsWinnerPayout = Number((pot / 2).toFixed(2));
-      updated.blowoutWinnerPayout = Number((pot / 2).toFixed(2));
-    }
-    setSidePotConfig(updated);
+    setSidePotConfig({ ...sidePotConfig, [field]: value });
+  };
+
+  // Tick or untick a team in this week's pot
+  const toggleEntrant = (rosterId: number) => {
+    const current = entrantIds ?? weekTeams.map((t) => t.rosterId);
+    const next = current.includes(rosterId)
+      ? current.filter((id) => id !== rosterId)
+      : [...current, rosterId];
+    setEntrantsByWeek((prev) => ({ ...prev, [selectedWeek]: next }));
+  };
+  const setAllEntrants = (all: boolean) => {
+    setEntrantsByWeek((prev) => ({
+      ...prev,
+      [selectedWeek]: all ? weekTeams.map((t) => t.rosterId) : [],
+    }));
   };
 
   const standardToneOptions: { id: NoteTone; label: string; icon: any; desc: string }[] = [
@@ -372,7 +388,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
           duesNote,
           includePowerRankings,
           includeWaiverAdvice,
-          sidePotConfig,
+          sidePotConfig: effectiveSidePot,
           customApiKey: customApiKey || undefined,
         }),
       });
@@ -398,7 +414,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
           stats,
           choppedStats,
           format,
-          sidePotConfig,
+          effectiveSidePot,
           motto,
           editionTag,
           tone
@@ -433,7 +449,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
       stats,
       choppedStats,
       format,
-      sidePotConfig,
+      effectiveSidePot,
       motto,
       editionTag,
       toneToUse
@@ -661,46 +677,65 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                         className="w-full p-1.5 bg-slate-900 border border-slate-800 rounded text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
-                        Entries Count
-                      </label>
-                      <input
-                        type="number"
-                        min="2"
-                        value={sidePotConfig.totalEntries}
-                        onChange={(e) => updateSidePot('totalEntries', Number(e.target.value))}
-                        className="w-full p-1.5 bg-slate-900 border border-slate-800 rounded text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
-                      />
+                    <div className="flex flex-col justify-end">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                        Entries
+                      </span>
+                      <span className="p-1.5 font-mono text-xs text-white">
+                        {effectiveSidePot.totalEntries} × ${sidePotConfig.entryFee}
+                      </span>
                     </div>
-                    {weekHasScores && weekTeams.length > 0 && (
+                    {weekTeams.length > 0 && (
                       <div className="col-span-2">
-                        <label
-                          htmlFor="side-pot-points-winner"
-                          className="text-[10px] text-slate-400 uppercase font-bold block mb-1"
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold">
+                            In the Pot This Week ({effectiveSidePot.totalEntries} of {weekTeams.length})
+                          </span>
+                          <span className="flex gap-2 text-[11px] font-semibold">
+                            <button
+                              type="button"
+                              onClick={() => setAllEntrants(true)}
+                              className="text-emerald-400 hover:underline cursor-pointer"
+                            >
+                              All
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAllEntrants(false)}
+                              className="text-slate-400 hover:text-white hover:underline cursor-pointer"
+                            >
+                              None
+                            </button>
+                          </span>
+                        </div>
+                        <div
+                          id="side-pot-entrants"
+                          className="max-h-48 overflow-y-auto rounded border border-slate-800 bg-slate-900 divide-y divide-slate-800/70"
                         >
-                          #1 Points Pot Winner
-                        </label>
-                        <select
-                          id="side-pot-points-winner"
-                          value={sidePotConfig.pointsWinnerRosterId ?? ''}
-                          onChange={(e) =>
-                            updateSidePot(
-                              'pointsWinnerRosterId',
-                              e.target.value === '' ? null : Number(e.target.value)
-                            )
-                          }
-                          className="w-full p-1.5 bg-slate-900 border border-slate-800 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none cursor-pointer"
-                        >
-                          <option value="">
-                            Automatic{autoPointsWinnerName ? ` (${autoPointsWinnerName})` : ''}
-                          </option>
                           {weekTeams.map((t) => (
-                            <option key={t.rosterId} value={t.rosterId}>
-                              {t.ownerName} — {t.teamName} ({t.points.toFixed(2)} pts)
-                            </option>
+                            <label
+                              key={t.rosterId}
+                              className="flex items-center gap-2 px-2 py-1.5 text-slate-300 cursor-pointer hover:bg-slate-800/60"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={entrantIds ? entrantIds.includes(t.rosterId) : true}
+                                onChange={() => toggleEntrant(t.rosterId)}
+                                className="rounded bg-slate-900 border-slate-700 text-emerald-600 focus:ring-0 w-3.5 h-3.5 shrink-0"
+                              />
+                              <span className="truncate flex-1">
+                                {t.ownerName}
+                                <span className="text-slate-500"> — {t.teamName}</span>
+                              </span>
+                              <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                                {t.points.toFixed(2)}
+                              </span>
+                            </label>
                           ))}
-                        </select>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Pot winners are picked from checked teams only.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -711,7 +746,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
             {/* Quick summary of side pot */}
             {sidePotConfig.enabled && (
               <div className="text-[11px] text-slate-400 flex justify-between pt-1">
-                <span>Total Pot: ${sidePotConfig.totalPot.toFixed(2)}</span>
+                <span>Total Pot: ${effectiveSidePot.totalPot.toFixed(2)}</span>
                 <span className="text-emerald-400 font-medium">
                   50/50 (#1 Pts / Blowout)
                 </span>
