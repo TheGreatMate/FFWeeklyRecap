@@ -189,15 +189,18 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
   };
 
   const handlePrint = () => {
-    printGazetteElement('gazette-document', isDarkMode);
+    setExportError(null);
+    printGazetteElement('gazette-document', isDarkMode, setExportError);
   };
 
   const handleDownloadStandalone = () => {
+    setExportError(null);
     downloadGazetteHTML(
       document.getElementById('gazette-document'),
       localData.leagueName,
       localData.week,
-      isDarkMode
+      isDarkMode,
+      setExportError
     );
   };
 
@@ -332,7 +335,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0" />
             <div>
-              <p className="font-bold text-sm text-white">Could not generate PDF directly</p>
+              <p className="font-bold text-sm text-white">Export failed</p>
               <p className="text-[11px] text-rose-200">{exportError}</p>
             </div>
           </div>

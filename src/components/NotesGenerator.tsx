@@ -26,6 +26,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import {
@@ -119,6 +120,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
   const [generationSource, setGenerationSource] = useState<'ai' | 'builtin' | null>('builtin');
   const [hasGeminiKey, setHasGeminiKey] = useState<boolean | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [customApiKey, setCustomApiKey] = useState<string>(() => {
     try {
       return localStorage.getItem('sleeper_custom_gemini_key') || '';
@@ -955,6 +957,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                     onClick={async () => {
                       if (isExportingPdf) return;
                       setIsExportingPdf(true);
+                      setExportError(null);
                       try {
                         await exportGazetteToPdf({
                           leagueName: gazetteData.leagueName,
@@ -963,7 +966,7 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                       } catch (e) {
                         console.error('PDF export failed:', e);
                         const msg = e instanceof Error ? e.message : String(e);
-                        alert(`Could not export PDF directly (${msg}). You can also try "Print" or "Save HTML".`);
+                        setExportError(`Could not export PDF directly (${msg}). You can also try "Print" or "Save HTML".`);
                       } finally {
                         setIsExportingPdf(false);
                       }
@@ -983,13 +986,16 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                   <button
                     type="button"
                     id="action-bar-download-html-btn"
-                    onClick={() =>
+                    onClick={() => {
+                      setExportError(null);
                       downloadGazetteHTML(
                         document.getElementById('gazette-document'),
                         gazetteData.leagueName,
-                        gazetteData.week
-                      )
-                    }
+                        gazetteData.week,
+                        undefined,
+                        setExportError
+                      );
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
                     title="Download Standalone HTML for Printing or PDF Export"
                   >
@@ -1000,7 +1006,10 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                   <button
                     type="button"
                     id="action-bar-print-gazette-btn"
-                    onClick={() => printGazetteElement('gazette-document')}
+                    onClick={() => {
+                      setExportError(null);
+                      printGazetteElement('gazette-document', undefined, setExportError);
+                    }}
                     className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1.5 border border-slate-700 transition-colors cursor-pointer"
                     title="Print or Save as PDF"
                   >
@@ -1040,6 +1049,25 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
               </button>
             </div>
           </div>
+
+          {exportError && (
+            <div className="bg-rose-950/90 border border-rose-700 text-rose-100 text-xs px-4 py-3 rounded-xl flex items-center justify-between gap-3 shadow-xl print:hidden">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-300 shrink-0" />
+                <div>
+                  <p className="font-bold text-sm text-white">Export failed</p>
+                  <p className="text-[11px] text-rose-200">{exportError}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExportError(null)}
+                className="text-xs bg-rose-900 hover:bg-rose-800 text-white px-2.5 py-1 rounded cursor-pointer shrink-0"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
 
           {/* View Container */}
           <div className="flex-1 min-h-[500px] overflow-y-auto">
