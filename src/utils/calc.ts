@@ -177,6 +177,52 @@ export function resolveTeamAvatarUrl(
   return generateMonogramDataUrl(ownerName);
 }
 
+const BENCH_SWAP_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+
+/**
+ * For each position, compares a team's best bench player against its lowest-scoring
+ * starter there. Returns every position where the bench player outscored the starter
+ * by at least half a point.
+ */
+function findBenchSwaps(
+  team: TeamInfo
+): { pos: string; bestBench: CompactPlayer; lowestStarter: CompactPlayer; diff: number }[] {
+  const starterIdSet = new Set(team.starterIds || []);
+  const benchPlayers = (team.allPlayerDetails || []).filter(
+    (p) => !starterIdSet.has(p.id) && typeof p.points === 'number'
+  );
+  const swaps: { pos: string; bestBench: CompactPlayer; lowestStarter: CompactPlayer; diff: number }[] = [];
+
+  BENCH_SWAP_POSITIONS.forEach((pos) => {
+    const startersAtPos = (team.starterDetails || []).filter(
+      (s) => s.pos?.toUpperCase().trim() === pos && typeof s.points === 'number'
+    );
+    if (startersAtPos.length === 0) return;
+
+    const lowestStarter = startersAtPos.reduce(
+      (min, s) => (s.points < min.points ? s : min),
+      startersAtPos[0]
+    );
+
+    const benchAtPos = benchPlayers.filter(
+      (b) => b.pos?.toUpperCase().trim() === pos && typeof b.points === 'number'
+    );
+    if (benchAtPos.length === 0) return;
+
+    const bestBench = benchAtPos.reduce(
+      (max, b) => (b.points > max.points ? b : max),
+      benchAtPos[0]
+    );
+
+    if (bestBench.points > lowestStarter.points) {
+      const diff = Number((bestBench.points - lowestStarter.points).toFixed(2));
+      if (diff >= 0.5) swaps.push({ pos, bestBench, lowestStarter, diff });
+    }
+  });
+
+  return swaps;
+}
+
 export function calculateWeekStats(
   rosters: SleeperRoster[],
   users: SleeperLeagueUser[],
@@ -386,7 +432,6 @@ export function calculateWeekStats(
 
   // Positional Bench Blunders ("If only [Manager] had started [BenchPlayer] instead of [Starter]..."):
   const positionalBlunders: PositionalBenchBlunder[] = [];
-  const trackedPositions = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
   if (hasStarted) {
     interface RawBlunderCandidate {
@@ -404,11 +449,6 @@ export function calculateWeekStats(
     const rawCandidates: RawBlunderCandidate[] = [];
 
     allTeams.forEach((team) => {
-      const starterIdSet = new Set(team.starterIds || []);
-      const benchPlayers = (team.allPlayerDetails || []).filter(
-        (p) => !starterIdSet.has(p.id) && typeof p.points === 'number'
-      );
-
       const matchup = headToHeadList.find(
         (m) => m.teamA.rosterId === team.rosterId || m.teamB.rosterId === team.rosterId
       );
@@ -421,45 +461,19 @@ export function calculateWeekStats(
         : undefined;
       const opponentName = opponent?.ownerName || 'their opponent';
 
-      trackedPositions.forEach((pos) => {
-        const startersAtPos = (team.starterDetails || []).filter(
-          (s) => s.pos?.toUpperCase().trim() === pos && typeof s.points === 'number'
-        );
-        if (startersAtPos.length === 0) return;
-
-        const lowestStarter = startersAtPos.reduce(
-          (min, s) => (s.points < min.points ? s : min),
-          startersAtPos[0]
-        );
-
-        const benchAtPos = benchPlayers.filter(
-          (b) => b.pos?.toUpperCase().trim() === pos && typeof b.points === 'number'
-        );
-        if (benchAtPos.length === 0) return;
-
-        const bestBench = benchAtPos.reduce(
-          (max, b) => (b.points > max.points ? b : max),
-          benchAtPos[0]
-        );
-
-        // Check if bench player outscored the lowest starter at the same position
-        if (bestBench.points > lowestStarter.points) {
-          const diff = Number((bestBench.points - lowestStarter.points).toFixed(2));
-          if (diff >= 0.5) {
-            const wouldHaveWon = didLose && diff > margin;
-            rawCandidates.push({
-              team,
-              pos,
-              bestBench,
-              lowestStarter,
-              diff,
-              margin,
-              opponentName,
-              wouldHaveWon,
-              didLose,
-            });
-          }
-        }
+      findBenchSwaps(team).forEach(({ pos, bestBench, lowestStarter, diff }) => {
+        const wouldHaveWon = didLose && diff > margin;
+        rawCandidates.push({
+          team,
+          pos,
+          bestBench,
+          lowestStarter,
+          diff,
+          margin,
+          opponentName,
+          wouldHaveWon,
+          didLose,
+        });
       });
     });
 
@@ -800,6 +814,74 @@ export function calculateChoppedStats(
     };
   }
 
+  // Hindsight 20/20 for chopped leagues: the chopped team's swap "flips" if it would have
+  // cleared the next-lowest survivor; survivors are measured by their cushion over the chop.
+  const positionalBlunders: PositionalBenchBlunder[] = [];
+  if (choppedTeam && activeTeams.some((t) => t.points > 0)) {
+    const bubble = narrowEscape?.team;
+    const candidates = activeTeams.flatMap((team) => {
+      const isChopped = team.rosterId === choppedTeam.rosterId;
+      const margin = isChopped
+        ? narrowEscape?.marginOverChopped ?? 0
+        : Number((team.points - choppedTeam.points).toFixed(2));
+      const opponentName = isChopped ? bubble?.ownerName || 'the survivors' : choppedTeam.ownerName;
+      return findBenchSwaps(team).map((swap) => ({
+        team,
+        ...swap,
+        margin,
+        opponentName,
+        didLose: isChopped,
+        wouldHaveWon: isChopped && !!bubble && swap.diff > margin,
+      }));
+    });
+
+    // The chopped team leads (it's the story of the week), then the biggest swings; one entry per team
+    candidates.sort((a, b) => Number(b.didLose) - Number(a.didLose) || b.diff - a.diff);
+    const seen = new Set<number>();
+    candidates
+      .filter((c) => (seen.has(c.team.rosterId) ? false : (seen.add(c.team.rosterId), true)))
+      .forEach((c, idx) => {
+        const generated = generateBlunderPhrasing({
+          manager: c.team.ownerName,
+          teamName: c.team.teamName,
+          position: c.pos,
+          benchPlayerName: c.bestBench.name,
+          benchPlayerPoints: c.bestBench.points,
+          starterPlayerName: c.lowestStarter.name,
+          starterPlayerPoints: c.lowestStarter.points,
+          pointsDifference: c.diff,
+          matchupMargin: c.margin,
+          opponentName: c.opponentName,
+          wouldHaveWon: c.wouldHaveWon,
+          didLose: c.didLose,
+          index: idx,
+          mode: 'chopped',
+        });
+        positionalBlunders.push({
+          manager: c.team.ownerName,
+          teamName: c.team.teamName,
+          avatarUrl: c.team.avatarUrl,
+          position: c.pos,
+          benchPlayerName: c.bestBench.name,
+          benchPlayerPoints: c.bestBench.points,
+          starterPlayerName: c.lowestStarter.name,
+          starterPlayerPoints: c.lowestStarter.points,
+          pointsDifference: c.diff,
+          matchupMargin: c.margin,
+          opponentName: c.opponentName,
+          wouldHaveWonMatchup: c.wouldHaveWon,
+          flipLabel: 'WOULD HAVE SURVIVED!',
+          contextLabel: c.didLose
+            ? `${c.margin} pts short of survival`
+            : `+${c.margin} pts above the chop`,
+          blurb: generated.primaryBlurb,
+          headline: generated.headline,
+          flavorTag: generated.flavorTag,
+          alternativeBlurbs: generated.alternativeBlurbs,
+        });
+      });
+  }
+
   // Danger zone: bottom 3 survivors above the cut among ACTIVE teams
   const dangerZone = activeTeams.slice(Math.max(0, activeTeams.length - 4), Math.max(0, activeTeams.length - 1));
   const safeSurvivors = activeTeams.slice(0, Math.max(0, activeTeams.length - 4));
@@ -854,6 +936,8 @@ export function calculateChoppedStats(
     choppedRosterStarters,
     choppedRosterDetails,
     topRankedChoppedPlayers,
+    positionalBlunders,
+    topPositionalBlunder: positionalBlunders[0] || null,
   };
 }
 
