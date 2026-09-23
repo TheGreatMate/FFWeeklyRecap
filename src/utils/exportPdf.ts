@@ -371,8 +371,12 @@ export async function exportGazetteToPdf(options: ExportPdfOptions = {}): Promis
 
       const imgData = canvas.toDataURL('image/jpeg', 0.96);
 
-      // Always fill the entire Letter page edge-to-edge
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+      // Fill the Letter page edge-to-edge. A page taller than Letter is scaled down evenly
+      // and centered (on the matching background) instead of being squashed vertically.
+      const heightRatio = measuredHeight / LETTER_HEIGHT_PX;
+      const drawWidth = heightRatio > 1 ? pageWidth / heightRatio : pageWidth;
+      const drawX = (pageWidth - drawWidth) / 2;
+      pdf.addImage(imgData, 'JPEG', drawX, 0, drawWidth, pageHeight, undefined, 'FAST');
 
       if (i < totalPages - 1) {
         pdf.addPage('letter', 'portrait');

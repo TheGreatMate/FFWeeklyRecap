@@ -1066,7 +1066,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                         : b.pointsDifference >= 15
                         ? 'bg-amber-600 text-white'
                         : isDarkMode ? 'bg-slate-800 text-amber-300' : 'bg-slate-900 text-amber-300';
-                      const tagLabel = b.flavorTag || (isFlipped ? 'MATCHUP FLIPPER' : `${b.position} SWAP`);
+                      const tagLabel = b.flavorTag || (isFlipped ? (b.flipLabel ? 'SURVIVAL FLIPPER' : 'MATCHUP FLIPPER') : `${b.position} SWAP`);
 
                       return (
                         <div key={idx} className="p-3">
@@ -1109,7 +1109,7 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                                 <span className={`text-[9px] font-black border px-1.5 py-0.5 rounded uppercase tracking-wide ${
                                   isDarkMode ? 'bg-rose-950/80 text-rose-300 border-rose-700' : 'bg-rose-100 text-rose-800 border-rose-300'
                                 }`}>
-                                  WOULD HAVE WON!
+                                  {b.flipLabel || 'WOULD HAVE WON!'}
                                 </span>
                               )}
                             </div>
@@ -1152,11 +1152,11 @@ export const WeeklyGazetteReport: React.FC<WeeklyGazetteReportProps> = ({
                             <span className={`font-mono font-bold ${isDarkMode ? 'text-amber-300' : 'text-amber-800'}`}>
                               +{b.pointsDifference} pt swing
                             </span>
-                            {b.opponentName && (
+                            {(b.contextLabel || b.opponentName) && (
                               <>
                                 <span className={isDarkMode ? 'text-slate-600' : 'text-slate-400'}>•</span>
                                 <span className={`text-[10px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                                  vs {b.opponentName}
+                                  {b.contextLabel || `vs ${b.opponentName}`}
                                 </span>
                               </>
                             )}

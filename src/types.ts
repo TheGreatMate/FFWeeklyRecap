@@ -136,6 +136,10 @@ export interface PositionalBenchBlunder {
   matchupMargin?: number;
   opponentName?: string;
   wouldHaveWonMatchup?: boolean;
+  /** Badge shown when the swap would have flipped the result; defaults to "WOULD HAVE WON!" */
+  flipLabel?: string;
+  /** Footer context shown instead of "vs {opponentName}" (used by chopped leagues) */
+  contextLabel?: string;
   blurb: string;
   headline?: string;
   flavorTag?: string;
@@ -202,6 +206,8 @@ export interface ChoppedWeekStats {
   choppedRosterStarters: string[];
   choppedRosterDetails?: CompactPlayer[];
   topRankedChoppedPlayers?: CompactPlayer[];
+  positionalBlunders?: PositionalBenchBlunder[];
+  topPositionalBlunder?: PositionalBenchBlunder | null;
 }
 
 export type NoteTone =

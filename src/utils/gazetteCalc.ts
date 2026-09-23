@@ -315,6 +315,8 @@ export function buildGazetteReportData(
             ? `The earth has swallowed ${chopped?.teamName}. The living must now feast on what remains. Rest in peace.`
             : `Week ${week} is history. One manager is in the grave, and eleven vultures are ready to feast on their roster.`,
       },
+      topPositionalBlunder: c.topPositionalBlunder || null,
+      positionalBlunders: c.positionalBlunders || [],
     };
   }
 

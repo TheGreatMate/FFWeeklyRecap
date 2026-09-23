@@ -12,6 +12,13 @@ export interface BlunderContext {
   wouldHaveWon: boolean;
   didLose: boolean;
   index: number;
+  /**
+   * 'chopped' re-reads the fields for Guillotine leagues: didLose = was chopped,
+   * wouldHaveWon = would have survived, matchupMargin = points short of safety (chopped team)
+   * or cushion over the chop line (survivors), opponentName = the team they'd have passed
+   * (chopped team) or the chopped team (survivors).
+   */
+  mode?: 'h2h' | 'chopped';
 }
 
 export interface GeneratedBlunderText {
@@ -36,6 +43,7 @@ export function generateBlunderPhrasing(ctx: BlunderContext): GeneratedBlunderTe
     wouldHaveWon,
     didLose,
     index,
+    mode = 'h2h',
   } = ctx;
 
   const closedGap = Number(Math.max(0, margin - diff).toFixed(2));
@@ -45,7 +53,48 @@ export function generateBlunderPhrasing(ctx: BlunderContext): GeneratedBlunderTe
   let tags: string[] = [];
   let options: string[] = [];
 
-  if (wouldHaveWon) {
+  if (mode === 'chopped' && wouldHaveWon) {
+    // Chopped team whose bench swap would have cleared the cut line
+    headlines = [
+      'Beheaded by the Lineup Card',
+      'The Swap That Would Have Saved Them',
+      'Executed With the Pardon in Hand',
+      'Survival Left on the Pine',
+    ];
+    tags = ['WOULD HAVE SURVIVED', 'SELF-INFLICTED CHOP', 'FATAL BENCH ERROR', 'PARDON IGNORED'];
+    options = [
+      `If only ${manager} had started ${bench} (${benchPts} pts) over ${starter} (${starterPts} pts), that ${margin}-point gap to ${opp} vanishes and ${teamName} lives to see another week.`,
+      `The guillotine didn't take ${manager}—the lineup card did. ${bench} put up ${benchPts} on the bench while ${starter} managed ${starterPts}. That +${diff} swing clears the cut line by ${flippedMargin} points.`,
+      `${manager} had the pardon in hand and left it on the pine. Swapping ${bench} in for ${starter} was worth +${diff}, more than the ${margin} points separating them from ${opp}.`,
+      `The math will haunt ${manager} forever: ${bench} (${benchPts} pts) over ${starter} (${starterPts} pts) and it's ${opp} walking to the chopping block instead.`,
+    ];
+  } else if (mode === 'chopped' && didLose) {
+    // Chopped team where the swap would only have softened the blow
+    headlines = ['Salt on the Blade', 'A Slightly Less Embarrassing Execution', `Wrong Horse at ${position}`, 'Doomed Either Way'];
+    tags = ['SALT ON THE BLADE', diff >= 15 ? 'BENCH NUKE' : 'LINEUP REGRET', 'WRONG CALL', 'DOOMED ANYWAY'];
+    options = [
+      `It wouldn't have saved them, but starting ${bench} (${benchPts} pts) over ${starter} (${starterPts} pts) would have left ${manager} just ${closedGap} points short of survival instead of ${margin}.`,
+      `${manager} walked to the guillotine with ${bench}'s ${benchPts} points still sitting on the bench. ${starter} managed ${starterPts}. The blade falls either way, but that one stings.`,
+      `Salt on the blade for ${teamName}: picking ${starter} over ${bench} at ${position} cost ${diff} points on the way out the door.`,
+      `No lineup could have saved ${manager} this week, but leaving ${bench} (${benchPts} pts) on the pine for ${starter} (${starterPts} pts) made the execution a little uglier.`,
+    ];
+  } else if (mode === 'chopped') {
+    // Survivor who left points on the bench
+    const tight = margin <= 15;
+    headlines = [
+      tight ? 'Playing With Fire at the Cut Line' : 'Survived in Spite of Themselves',
+      'Points Stranded on the Pine',
+      'Dodged the Blade',
+      'Luxury Malpractice',
+    ];
+    tags = [tight ? 'TOO CLOSE FOR COMFORT' : 'SURVIVED THE GOOF', diff >= 15 ? 'BENCH NUKE' : 'POINTS STRANDED', 'DODGED THE BLADE', 'LUXURY BLUNDER'];
+    options = [
+      `${manager} survived, but ${bench} (${benchPts} pts) rode the pine behind ${starter} (${starterPts} pts). ${tight ? `With only ${margin} points of cushion over ${opp}, that ${diff}-point gamble nearly cost everything.` : `Lucky ${opp} gave them room to spare.`}`,
+      `Somewhere a guillotine is disappointed: ${manager} benched ${bench}'s ${benchPts} points for ${starter}'s ${starterPts} and still lived to tell the tale.`,
+      `${teamName} escaped the chop, but letting ${diff} points rot on the bench at ${position} is the kind of move that gets you beheaded next week.`,
+      `${manager} rolled out ${starter} (${starterPts} pts) while ${bench} posted ${benchPts} on the bench. ${opp} took the fall, so this one goes in the "lessons learned" file.`,
+    ];
+  } else if (wouldHaveWon) {
     // Scenario 1: Game-Flipping Heartbreak
     headlines = [
       'The Game-Flipping Heartbreak',
