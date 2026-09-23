@@ -5,6 +5,7 @@ import {
   SidePotConfig,
   GazetteReportData,
   NoteTone,
+  TeamInfo,
 } from '../types';
 import { getTopRankedPlayers } from './calc';
 
@@ -16,7 +17,26 @@ export const DEFAULT_SIDE_POT_CONFIG: SidePotConfig = {
   pointsWinnerPayout: 12.5,
   blowoutWinnerPayout: 12.5,
   nextWeekNotice: 'Due before TNF kickoff',
+  participantRosterIds: null,
 };
+
+/**
+ * Every team playing this week, highest score first. Used for the side pot
+ * entrant checklist and to pick winners among entrants.
+ */
+export function listWeekTeams(
+  weekStats?: WeekStats | null,
+  choppedStats?: ChoppedWeekStats | null
+): TeamInfo[] {
+  const teams = choppedStats
+    ? choppedStats.allRankedTeams
+    : (weekStats?.matchups || []).flatMap((m) => [m.teamA, m.teamB]);
+  const byRoster = new Map<number, TeamInfo>();
+  teams.forEach((t) => {
+    if (t && !byRoster.has(t.rosterId)) byRoster.set(t.rosterId, t);
+  });
+  return [...byRoster.values()].sort((a, b) => b.points - a.points);
+}
 
 /**
  * Builds all data and commentary for the 3-page Weekly Gazette Newspaper Report
@@ -43,10 +63,20 @@ export function buildGazetteReportData(
   const editionTag =
     customEditionTag || (isChopped ? 'SURVIVAL ELIMINATION' : 'INAUGURAL DYNASTY SEASON');
 
+  // Teams that joined this week's side pot. null means everyone is in, which keeps the
+  // original league-wide winners; otherwise winners are picked from entrants only.
+  const potEntrants = sidePotConfig.participantRosterIds
+    ? new Set(sidePotConfig.participantRosterIds)
+    : null;
+  const inPot = (t?: TeamInfo | null): t is TeamInfo =>
+    !!t && (!potEntrants || potEntrants.has(t.rosterId));
+
   // Handle Chopped Format
   if (isChopped && choppedStats) {
     const c = choppedStats;
     const apex = c.apexSurvivor;
+    // Both chopped side pots go to the top-scoring entrant (the Apex Survivor when everyone is in)
+    const potTopScorer = potEntrants ? listWeekTeams(null, c).find(inPot) : apex;
     const chopped = c.choppedTeam;
     const narrow = c.narrowEscape;
 
@@ -240,11 +270,11 @@ export function buildGazetteReportData(
         totalPot: sidePotConfig.totalPot,
         entriesCount: sidePotConfig.totalEntries,
         entryFee: sidePotConfig.entryFee,
-        pointsWinnerName: apex?.ownerName || 'Apex Leader',
-        pointsWinnerAvatarUrl: apex?.avatarUrl,
+        pointsWinnerName: potTopScorer?.ownerName || (potEntrants ? 'No entries' : 'Apex Leader'),
+        pointsWinnerAvatarUrl: potTopScorer?.avatarUrl,
         pointsPayout: sidePotConfig.pointsWinnerPayout,
-        blowoutWinnerName: apex?.ownerName || 'Apex Leader',
-        blowoutWinnerAvatarUrl: apex?.avatarUrl,
+        blowoutWinnerName: potTopScorer?.ownerName || (potEntrants ? 'No entries' : 'Apex Leader'),
+        blowoutWinnerAvatarUrl: potTopScorer?.avatarUrl,
         blowoutPayout: sidePotConfig.blowoutWinnerPayout,
         nextWeekFee: sidePotConfig.entryFee,
       },
@@ -505,7 +535,24 @@ export function buildGazetteReportData(
     leadStory = `Look at the numbers. Just open your eyes and look at the timestamps. ${gmPoints} points? Convenient garbage-time touchdowns in the final 2 minutes? We ran statistical simulations through our encrypted terminal, and the probability of ${gmName}'s outcome is 0.0041%. Did the Sleeper scheduling algorithm collude with the schedule-makers? We are not pointing fingers, but the paper trail is undeniably suspicious.`;
   }
 
+  // Side pot winners, chosen from this week's entrants only:
+  // Points pot goes to the highest-scoring loser (the Unlucky Bastard), else the top scorer.
+  // Blowout pot goes to the winner of the biggest-margin matchup.
+  const matchups = ws?.matchups || [];
+  const potPointsTeam: TeamInfo | undefined = potEntrants
+    ? matchups
+        .map((m) => m.loser)
+        .filter(inPot)
+        .sort((a, b) => b.points - a.points)[0] || listWeekTeams(ws, null).find(inPot)
+    : unlucky?.team || highScorer || fallbackWinner;
+  const potBlowoutTeam: TeamInfo | undefined = potEntrants
+    ? [...matchups].filter((m) => inPot(m.winner)).sort((a, b) => b.margin - a.margin)[0]?.winner
+    : blowout?.winner || fallbackWinner;
+
   // Unlucky Bastard Club
+  // They're only promised the points pot if they actually won it
+  const unluckyWinsPointsPot =
+    sidePotConfig.enabled && !!unlucky && potPointsTeam?.rosterId === unlucky.team.rosterId;
   const unluckyBastard = unlucky
     ? {
         manager: unlucky.team.ownerName,
@@ -513,10 +560,10 @@ export function buildGazetteReportData(
         opponent: unlucky.matchup.winner.ownerName,
         opponentPts: unlucky.matchup.winner.points,
         avatarUrl: unlucky.team.avatarUrl,
-        consolationPrize: sidePotConfig.enabled
+        consolationPrize: unluckyWinsPointsPot
           ? `$${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout`
           : 'High-scoring sympathy & moral victory',
-        blurb: sidePotConfig.enabled
+        blurb: unluckyWinsPointsPot
           ? `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. The consolation prize: a $${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout.`
           : `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. No victory or payout to show for it—just pure heartbreak and high-scoring sympathy.`,
       }
@@ -602,15 +649,11 @@ export function buildGazetteReportData(
     };
   });
 
-  // Side pot winners:
-  // Points pot goes to highest scorer (or unlucky bastard if league rule prefers high-scoring loser)
-  const pointsWinner = unlucky?.team.ownerName || highScorer?.ownerName || fallbackWinner?.ownerName || 'Winner';
-  const pointsWinnerAvatar =
-    unlucky?.team.ownerName === pointsWinner
-      ? unlucky.team.avatarUrl
-      : highScorer?.avatarUrl || fallbackWinner?.avatarUrl;
-  const blowoutWinner = blowout?.winner.ownerName || fallbackWinner?.ownerName || 'Winner';
-  const blowoutWinnerAvatar = blowout?.winner.avatarUrl || fallbackWinner?.avatarUrl;
+  const noWinnerLabel = potEntrants ? 'No entries' : 'Winner';
+  const pointsWinner = potPointsTeam?.ownerName || noWinnerLabel;
+  const pointsWinnerAvatar = potPointsTeam?.avatarUrl;
+  const blowoutWinner = potBlowoutTeam?.ownerName || noWinnerLabel;
+  const blowoutWinnerAvatar = potBlowoutTeam?.avatarUrl;
 
   const leadPhoto = {
     headline: 'GAME OF THE WEEK / HIGH ROLLER SHOWDOWN',

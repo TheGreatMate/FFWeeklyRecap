@@ -221,6 +221,8 @@ export interface SidePotConfig {
   pointsWinnerPayout: number;
   blowoutWinnerPayout: number;
   nextWeekNotice: string;
+  /** Teams that paid into this week's pot; null/undefined = every team is in */
+  participantRosterIds?: number[] | null;
 }
 
 export interface GazetteReportData {
