@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Loader2, User, AlertCircle, Calendar } from 'lucide-react';
+import { Search, Loader2, User, AlertCircle, Calendar, Play } from 'lucide-react';
 import { SleeperUser } from '../types';
 
 interface UserSearchProps {
@@ -11,6 +11,7 @@ interface UserSearchProps {
   season: string;
   onSeasonChange: (season: string) => void;
   onClear: () => void;
+  onTryDemo: () => void;
 }
 
 export const UserSearch: React.FC<UserSearchProps> = ({
@@ -22,6 +23,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
   season,
   onSeasonChange,
   onClear,
+  onTryDemo,
 }) => {
   const [inputVal, setInputVal] = useState(currentUsername);
 
@@ -29,11 +31,6 @@ export const UserSearch: React.FC<UserSearchProps> = ({
     e.preventDefault();
     if (!inputVal.trim() || isLoading) return;
     onSearchUser(inputVal.trim());
-  };
-
-  const handleQuickPick = (name: string) => {
-    setInputVal(name);
-    onSearchUser(name);
   };
 
   return (
@@ -67,22 +64,6 @@ export const UserSearch: React.FC<UserSearchProps> = ({
             Enter your Sleeper username or Sleeper League ID to load your real rosters, matchups, and scores.
           </p>
         </div>
-
-        {/* Quick Suggestion Chips */}
-        <div className="flex items-center gap-1.5 flex-wrap text-xs text-slate-400">
-          <span className="text-slate-500 mr-1">Quick search:</span>
-          {['FantasyChamp', 'Commish', 'gridiron'].map((s) => (
-            <button
-              key={s}
-              type="button"
-              id={`quick-suggest-${s}`}
-              onClick={() => handleQuickPick(s)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-colors font-medium"
-            >
-              @{s}
-            </button>
-          ))}
-        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2.5">
@@ -95,7 +76,7 @@ export const UserSearch: React.FC<UserSearchProps> = ({
             type="text"
             value={inputVal}
             onChange={(e) => setInputVal(e.target.value)}
-            placeholder="Enter Sleeper Username (e.g. FantasyChamp) or League ID"
+            placeholder="Enter Sleeper Username or League ID"
             className="w-full pl-11 pr-4 py-3 bg-slate-950 border border-slate-700/80 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm font-medium transition-all"
           />
         </div>
@@ -119,6 +100,21 @@ export const UserSearch: React.FC<UserSearchProps> = ({
           )}
         </button>
       </form>
+
+      {!user && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+          <span>No Sleeper league handy?</span>
+          <button
+            id="try-demo-btn"
+            type="button"
+            onClick={onTryDemo}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+            <span>Try a Demo</span>
+          </button>
+        </div>
+      )}
 
       {/* Error state */}
       {error && (
