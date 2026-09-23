@@ -5,6 +5,7 @@ import {
   SidePotConfig,
   GazetteReportData,
   NoteTone,
+  TeamInfo,
 } from '../types';
 import { getTopRankedPlayers } from './calc';
 
@@ -16,7 +17,26 @@ export const DEFAULT_SIDE_POT_CONFIG: SidePotConfig = {
   pointsWinnerPayout: 12.5,
   blowoutWinnerPayout: 12.5,
   nextWeekNotice: 'Due before TNF kickoff',
+  pointsWinnerRosterId: null,
 };
+
+/**
+ * Every team playing this week, highest score first. Used for the commissioner's
+ * manual side-pot winner picker.
+ */
+export function listWeekTeams(
+  weekStats?: WeekStats | null,
+  choppedStats?: ChoppedWeekStats | null
+): TeamInfo[] {
+  const teams = choppedStats
+    ? choppedStats.allRankedTeams
+    : (weekStats?.matchups || []).flatMap((m) => [m.teamA, m.teamB]);
+  const byRoster = new Map<number, TeamInfo>();
+  teams.forEach((t) => {
+    if (t && !byRoster.has(t.rosterId)) byRoster.set(t.rosterId, t);
+  });
+  return [...byRoster.values()].sort((a, b) => b.points - a.points);
+}
 
 /**
  * Builds all data and commentary for the 3-page Weekly Gazette Newspaper Report
@@ -42,6 +62,14 @@ export function buildGazetteReportData(
 
   const editionTag =
     customEditionTag || (isChopped ? 'SURVIVAL ELIMINATION' : 'INAUGURAL DYNASTY SEASON');
+
+  // Commissioner's manual pick for the #1 Points pot, if set and still in this week's teams
+  const manualPointsWinner =
+    sidePotConfig.pointsWinnerRosterId != null
+      ? listWeekTeams(weekStats, isChopped ? choppedStats : null).find(
+          (t) => t.rosterId === sidePotConfig.pointsWinnerRosterId
+        ) || null
+      : null;
 
   // Handle Chopped Format
   if (isChopped && choppedStats) {
@@ -240,8 +268,8 @@ export function buildGazetteReportData(
         totalPot: sidePotConfig.totalPot,
         entriesCount: sidePotConfig.totalEntries,
         entryFee: sidePotConfig.entryFee,
-        pointsWinnerName: apex?.ownerName || 'Apex Leader',
-        pointsWinnerAvatarUrl: apex?.avatarUrl,
+        pointsWinnerName: manualPointsWinner?.ownerName || apex?.ownerName || 'Apex Leader',
+        pointsWinnerAvatarUrl: manualPointsWinner ? manualPointsWinner.avatarUrl : apex?.avatarUrl,
         pointsPayout: sidePotConfig.pointsWinnerPayout,
         blowoutWinnerName: apex?.ownerName || 'Apex Leader',
         blowoutWinnerAvatarUrl: apex?.avatarUrl,
@@ -506,6 +534,11 @@ export function buildGazetteReportData(
   }
 
   // Unlucky Bastard Club
+  // They collect the points pot unless the commissioner manually awarded it to someone else
+  const unluckyWinsPointsPot =
+    sidePotConfig.enabled &&
+    !!unlucky &&
+    (!manualPointsWinner || manualPointsWinner.rosterId === unlucky.team.rosterId);
   const unluckyBastard = unlucky
     ? {
         manager: unlucky.team.ownerName,
@@ -513,10 +546,10 @@ export function buildGazetteReportData(
         opponent: unlucky.matchup.winner.ownerName,
         opponentPts: unlucky.matchup.winner.points,
         avatarUrl: unlucky.team.avatarUrl,
-        consolationPrize: sidePotConfig.enabled
+        consolationPrize: unluckyWinsPointsPot
           ? `$${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout`
           : 'High-scoring sympathy & moral victory',
-        blurb: sidePotConfig.enabled
+        blurb: unluckyWinsPointsPot
           ? `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. The consolation prize: a $${sidePotConfig.pointsWinnerPayout.toFixed(2)} #1 Points side-pot payout.`
           : `${unlucky.team.ownerName} is the inductee. A ${unlucky.team.points}-point performance at 0-1 is the fantasy equivalent of doing everything right and still getting mugged in an alley. No victory or payout to show for it—just pure heartbreak and high-scoring sympathy.`,
       }
@@ -604,11 +637,18 @@ export function buildGazetteReportData(
 
   // Side pot winners:
   // Points pot goes to highest scorer (or unlucky bastard if league rule prefers high-scoring loser)
-  const pointsWinner = unlucky?.team.ownerName || highScorer?.ownerName || fallbackWinner?.ownerName || 'Winner';
-  const pointsWinnerAvatar =
-    unlucky?.team.ownerName === pointsWinner
-      ? unlucky.team.avatarUrl
-      : highScorer?.avatarUrl || fallbackWinner?.avatarUrl;
+  // A manual pick from the commissioner overrides both.
+  const pointsWinner =
+    manualPointsWinner?.ownerName ||
+    unlucky?.team.ownerName ||
+    highScorer?.ownerName ||
+    fallbackWinner?.ownerName ||
+    'Winner';
+  const pointsWinnerAvatar = manualPointsWinner
+    ? manualPointsWinner.avatarUrl
+    : unlucky?.team.ownerName === pointsWinner
+    ? unlucky.team.avatarUrl
+    : highScorer?.avatarUrl || fallbackWinner?.avatarUrl;
   const blowoutWinner = blowout?.winner.ownerName || fallbackWinner?.ownerName || 'Winner';
   const blowoutWinnerAvatar = blowout?.winner.avatarUrl || fallbackWinner?.avatarUrl;
 

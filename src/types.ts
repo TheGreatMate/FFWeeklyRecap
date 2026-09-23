@@ -221,6 +221,8 @@ export interface SidePotConfig {
   pointsWinnerPayout: number;
   blowoutWinnerPayout: number;
   nextWeekNotice: string;
+  /** Commissioner override for the #1 Points pot winner; null/undefined = pick automatically */
+  pointsWinnerRosterId?: number | null;
 }
 
 export interface GazetteReportData {

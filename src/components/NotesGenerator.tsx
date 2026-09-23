@@ -41,6 +41,7 @@ import {
   buildGazetteReportData,
   gazetteToMarkdown,
   DEFAULT_SIDE_POT_CONFIG,
+  listWeekTeams,
 } from '../utils/gazetteCalc';
 import { printGazetteElement, downloadGazetteHTML } from '../utils/printGazette';
 import { exportGazetteToPdf } from '../utils/exportPdf';
@@ -241,6 +242,23 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
     setGeneratedNotes(gazetteToMarkdown(updated));
   }, [leagueName, isChopped, stats, choppedStats, sidePotConfig, motto, format, tone, selectedWeek]);
 
+
+  // Teams for the manual #1 Points winner picker, and who would win automatically
+  const weekTeams = useMemo(
+    () => listWeekTeams(stats, isChopped ? choppedStats : null),
+    [stats, choppedStats, isChopped]
+  );
+  const weekHasScores = weekTeams.some((t) => t.points > 0);
+  const autoPointsWinnerName = isChopped
+    ? choppedStats?.apexSurvivor?.ownerName
+    : stats?.highestScoringLoser?.team.ownerName || stats?.highestScorer?.ownerName;
+
+  // A manual winner pick only applies to the week it was made for
+  useEffect(() => {
+    setSidePotConfig((prev) =>
+      prev.pointsWinnerRosterId == null ? prev : { ...prev, pointsWinnerRosterId: null }
+    );
+  }, [selectedWeek, leagueName]);
 
   // Handle entry fee / entries count change in side pot
   const updateSidePot = (field: keyof SidePotConfig, value: any) => {
@@ -655,6 +673,36 @@ export const NotesGenerator: React.FC<NotesGeneratorProps> = ({
                         className="w-full p-1.5 bg-slate-900 border border-slate-800 rounded text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                       />
                     </div>
+                    {weekHasScores && weekTeams.length > 0 && (
+                      <div className="col-span-2">
+                        <label
+                          htmlFor="side-pot-points-winner"
+                          className="text-[10px] text-slate-400 uppercase font-bold block mb-1"
+                        >
+                          #1 Points Pot Winner
+                        </label>
+                        <select
+                          id="side-pot-points-winner"
+                          value={sidePotConfig.pointsWinnerRosterId ?? ''}
+                          onChange={(e) =>
+                            updateSidePot(
+                              'pointsWinnerRosterId',
+                              e.target.value === '' ? null : Number(e.target.value)
+                            )
+                          }
+                          className="w-full p-1.5 bg-slate-900 border border-slate-800 rounded text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none cursor-pointer"
+                        >
+                          <option value="">
+                            Automatic{autoPointsWinnerName ? ` (${autoPointsWinnerName})` : ''}
+                          </option>
+                          {weekTeams.map((t) => (
+                            <option key={t.rosterId} value={t.rosterId}>
+                              {t.ownerName} — {t.teamName} ({t.points.toFixed(2)} pts)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
