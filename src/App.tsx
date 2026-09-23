@@ -330,13 +330,6 @@ export default function App() {
       }
     }
 
-    // If searching demo
-    if (trimmed.toLowerCase() === 'fantasychamp') {
-      handleLoadDemo();
-      setIsSearchingUser(false);
-      return;
-    }
-
     try {
       // Step 1: Use Sleeper API to find User ID
       const userData = await fetchSleeperUser(trimmed);
@@ -530,19 +523,12 @@ export default function App() {
     setChoppedWeek2Stats(c2);
   };
 
-  // Auto-load demo on initial load so the app greets the user with immediate visual proof and interactivity
-  useEffect(() => {
-    handleLoadDemo(1);
-  }, []);
-
   const isChoppedMode = leagueFormat === 'chopped';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
       {/* Top Navbar */}
       <Navbar
-        onLoadDemo={() => handleLoadDemo(selectedWeek)}
-        isDemoActive={isDemoActive}
         selectedWeek={selectedWeek}
         onSelectWeek={handleWeekChange}
         isDualWeek={isDualWeek}
@@ -601,6 +587,7 @@ export default function App() {
           currentUsername={username}
           season={season}
           onSeasonChange={handleSeasonChange}
+          onTryDemo={() => handleLoadDemo(selectedWeek)}
           onClear={() => {
             setUser(null);
             setLeagues([]);
@@ -617,8 +604,6 @@ export default function App() {
             selectedLeagueId={selectedLeague?.league_id || null}
             onSelectLeague={handleSelectLeague}
             isLoadingMatchups={isLoadingMatchups}
-            onLoadDemo={() => handleLoadDemo(selectedWeek)}
-            onLoadChoppedDemo={() => handleLoadChoppedDemo(selectedWeek)}
             selectedWeek={selectedWeek}
             onSelectWeek={handleWeekChange}
           />

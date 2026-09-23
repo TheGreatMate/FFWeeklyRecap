@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trophy, Users, ChevronRight, Loader2, Calendar, Play, Skull, Swords } from 'lucide-react';
+import { Trophy, Users, ChevronRight, Loader2, Calendar, Skull, Swords } from 'lucide-react';
 import { SleeperLeague } from '../types';
 import { detectLeagueFormat } from '../utils/calc';
 import { WeekSelector } from './WeekSelector';
@@ -9,8 +9,6 @@ interface LeagueSelectorProps {
   selectedLeagueId: string | null;
   onSelectLeague: (league: SleeperLeague) => void;
   isLoadingMatchups: boolean;
-  onLoadDemo: () => void;
-  onLoadChoppedDemo?: () => void;
   selectedWeek?: number;
   onSelectWeek?: (week: number) => void;
 }
@@ -20,8 +18,6 @@ export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
   selectedLeagueId,
   onSelectLeague,
   isLoadingMatchups,
-  onLoadDemo,
-  onLoadChoppedDemo,
   selectedWeek,
   onSelectWeek,
 }) => {
@@ -35,29 +31,9 @@ export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
         <h3 className="text-lg font-bold text-white mb-1">
           No 2026 Leagues Found
         </h3>
-        <p className="text-sm text-slate-400 max-w-md mx-auto mb-5">
+        <p className="text-sm text-slate-400 max-w-md mx-auto">
           This Sleeper account does not have active leagues registered for the 2026 season yet.
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <button
-            id="empty-state-demo-btn"
-            onClick={onLoadDemo}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-          >
-            <Play className="w-4 h-4 fill-white" />
-            <span>Load Demo Head-to-Head League</span>
-          </button>
-          {onLoadChoppedDemo && (
-            <button
-              id="empty-state-chopped-demo-btn"
-              onClick={onLoadChoppedDemo}
-              className="px-4 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-sm font-semibold transition-all shadow-md flex items-center gap-2 cursor-pointer"
-            >
-              <Skull className="w-4 h-4" />
-              <span>Load Demo Chopped / Guillotine League</span>
-            </button>
-          )}
-        </div>
       </div>
     );
   }
@@ -89,17 +65,6 @@ export const LeagueSelector: React.FC<LeagueSelectorProps> = ({
                 disabled={isLoadingMatchups}
               />
             </div>
-          )}
-
-          {onLoadChoppedDemo && (
-            <button
-              type="button"
-              onClick={onLoadChoppedDemo}
-              className="text-xs px-2.5 py-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/60 border border-rose-700/50 text-rose-300 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Skull className="w-3.5 h-3.5 text-rose-400" />
-              <span>Try Chopped Demo</span>
-            </button>
           )}
         </div>
       </div>

@@ -1,10 +1,8 @@
 import React from 'react';
-import { Trophy, Play } from 'lucide-react';
+import { Trophy } from 'lucide-react';
 import { WeekSelector } from './WeekSelector';
 
 interface NavbarProps {
-  onLoadDemo: () => void;
-  isDemoActive: boolean;
   selectedWeek?: number;
   onSelectWeek?: (week: number) => void;
   isDualWeek?: boolean;
@@ -13,8 +11,6 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  onLoadDemo,
-  isDemoActive,
   selectedWeek,
   onSelectWeek,
   isDualWeek = false,
@@ -59,22 +55,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
             </div>
           )}
-
-          {/* Quick Demo Button */}
-          <button
-            id="demo-league-btn"
-            onClick={onLoadDemo}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-              isDemoActive
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700 hover:border-slate-600'
-            }`}
-            title="Load sample 12-team league with scores, blowouts and commissioner recap"
-          >
-            <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-            <span className="hidden sm:inline">Try Demo League</span>
-            <span className="sm:hidden">Demo</span>
-          </button>
         </div>
       </div>
     </header>
